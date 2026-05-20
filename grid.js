@@ -11,7 +11,7 @@ let OFFSET_X = 0, OFFSET_Y = 0;
 
 // Кэш изображений аспектов (заполняется из app.js)
 const aspectImages = new Map();
-window.aspectImages = aspectImages;   // экспорт для доступа из app.js
+window.aspectImages = aspectImages;
 
 // ---------- Координатная математика (осевая система с pointy-top) ----------
 function hexToPixelRaw(x, y) {
@@ -58,7 +58,7 @@ function generateGrid(radius) {
     const yMin = Math.max(-radius, -radius - x);
     const yMax = Math.min(radius, radius - x);
     for (let y = yMin; y <= yMax; y++) {
-      gridState.set(`${x},${y}`, { active: false, aspect: null });
+      gridState.set(`${x},${y}`, { active: true, aspect: null, generated: false });
     }
   }
   currentRadius = radius;
@@ -98,16 +98,12 @@ function drawHexagon(cx, cy, cell) {
   }
   ctx.closePath();
   
-  // Заливка: активные клетки с разным оттенком в зависимости от типа аспекта
   if (cell.active) {
     if (cell.aspect && !cell.generated) {
-      // Пользовательский аспект - жёлтая подсветка
       ctx.fillStyle = 'rgba(220, 180, 80, 0.45)';
     } else if (cell.aspect && cell.generated) {
-      // Автоматический аспект - зелёная подсветка
       ctx.fillStyle = 'rgba(80, 220, 100, 0.45)';
     } else {
-      // Активная клетка без аспекта - обычная подсветка
       ctx.fillStyle = 'rgba(80, 220, 100, 0.25)';
     }
   } else {
@@ -115,11 +111,10 @@ function drawHexagon(cx, cy, cell) {
   }
   ctx.fill();
   
-  // Обводка: разные цвета для разных типов
   if (cell.aspect && !cell.generated) {
-    ctx.strokeStyle = '#ffcc55';  // жёлтая обводка для пользовательских
+    ctx.strokeStyle = '#ffcc55';
   } else if (cell.aspect && cell.generated) {
-    ctx.strokeStyle = '#88ff88';  // зелёная обводка для автоматических
+    ctx.strokeStyle = '#88ff88';
   } else {
     ctx.strokeStyle = cell.active ? '#aaffaa' : '#5a6e7c';
   }
@@ -142,112 +137,34 @@ function drawHexagon(cx, cy, cell) {
 }
 
 function drawConnections() {
-
-    const drawn=new Set();
-
-    for(
-        const [key,cell]
-        of gridState
-    ){
-
-        if(!cell.aspect)
-            continue;
-
-        const recipe=
-        window
-        .ASPECT_RECIPES
-        ?.[cell.aspect];
-
-        if(
-            !recipe ||
-            recipe.length!==2
-        )
-            continue;
-
-        const [x,y]=
-        key.split(',')
-        .map(Number);
-
-        for(
-            const [dx,dy]
-            of getNeighbors(x,y)
-        ){
-
-            const nKey=
-            `${x+dx},${y+dy}`;
-
-            if(
-                !gridState.has(
-                    nKey
-                )
-            )
-                continue;
-
-            const neighbor=
-            gridState.get(
-                nKey
-            );
-
-            if(
-                !neighbor.aspect
-            )
-                continue;
-
-            if(
-                !recipe.includes(
-                    neighbor.aspect
-                )
-            )
-                continue;
-
-            const edge=
-            [key,nKey]
-            .sort()
-            .join('|');
-
-            if(
-                drawn.has(edge)
-            )
-                continue;
-
-            drawn.add(edge);
-
-            const p1=
-            hexToPixel(x,y);
-
-            const [nx,ny]=
-            nKey.split(',')
-            .map(Number);
-
-            const p2=
-            hexToPixel(nx,ny);
-
-            ctx.beginPath();
-
-            ctx.moveTo(
-                p1.px,
-                p1.py
-            );
-
-            ctx.lineTo(
-                p2.px,
-                p2.py
-            );
-
-            ctx.strokeStyle=
-            '#ffda77';
-
-            ctx.lineWidth=2;
-
-            ctx.setLineDash(
-                [4,4]
-            );
-
-            ctx.stroke();
-
-            ctx.setLineDash([]);
-        }
+  const drawn = new Set();
+  for (const [key, cell] of gridState) {
+    if (!cell.aspect) continue;
+    const recipe = window.ASPECT_RECIPES?.[cell.aspect];
+    if (!recipe || recipe.length !== 2) continue;
+    const [x, y] = key.split(',').map(Number);
+    for (const [dx, dy] of getNeighbors(x, y)) {
+      const nKey = `${x+dx},${y+dy}`;
+      if (!gridState.has(nKey)) continue;
+      const neighbor = gridState.get(nKey);
+      if (!neighbor.aspect) continue;
+      if (!recipe.includes(neighbor.aspect)) continue;
+      const edge = [key, nKey].sort().join('|');
+      if (drawn.has(edge)) continue;
+      drawn.add(edge);
+      const p1 = hexToPixel(x, y);
+      const [nx, ny] = nKey.split(',').map(Number);
+      const p2 = hexToPixel(nx, ny);
+      ctx.beginPath();
+      ctx.moveTo(p1.px, p1.py);
+      ctx.lineTo(p2.px, p2.py);
+      ctx.strokeStyle = '#ffda77';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
+  }
 }
 
 function redraw() {
@@ -293,7 +210,10 @@ function resizeCanvas() {
   updateOffsets();
   redraw();
 }
-window.addEventListener('resize', resizeCanvas);
+window.addEventListener('resize', () => {
+  resizeCanvas();
+  if (window.scheduleTableRefresh) window.scheduleTableRefresh();
+});
 
 // Экспорт функций для использования в app.js
 window.gridState = gridState;
@@ -302,3 +222,5 @@ window.redraw = redraw;
 window.resizeCanvas = resizeCanvas;
 window.findShortestPath = findShortestPath;
 window.pixelToHex = pixelToHex;
+window.getNeighbors = getNeighbors;
+window.HEX_SIZE = HEX_SIZE;
