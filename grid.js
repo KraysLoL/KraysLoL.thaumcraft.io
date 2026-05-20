@@ -82,7 +82,14 @@ function getHexBounds() {
 function updateOffsets() {
   if (gridState.size === 0) return;
   const { minX, maxX, minY, maxY } = getHexBounds();
-  OFFSET_X = canvas.width / 2 - (minX + maxX) / 2;
+  
+  // Меню имеет ширину 310px + отступы, оставляем 330px слева
+  const leftMargin = 330;
+  
+  // Сдвигаем сетку так, чтобы её левый край был на leftMargin
+  OFFSET_X = leftMargin - minX;
+  
+  // Центрируем по вертикали
   OFFSET_Y = canvas.height / 2 - (minY + maxY) / 2;
 }
 
@@ -212,7 +219,9 @@ function resizeCanvas() {
 }
 window.addEventListener('resize', () => {
   resizeCanvas();
-  if (window.scheduleTableRefresh) window.scheduleTableRefresh();
+  if (window.scheduleTableRefresh) {
+    setTimeout(() => window.scheduleTableRefresh(), 50);
+  }
 });
 
 // Экспорт функций для использования в app.js
@@ -224,3 +233,4 @@ window.findShortestPath = findShortestPath;
 window.pixelToHex = pixelToHex;
 window.getNeighbors = getNeighbors;
 window.HEX_SIZE = HEX_SIZE;
+window.scheduleTableRefresh = scheduleTableRefresh;
