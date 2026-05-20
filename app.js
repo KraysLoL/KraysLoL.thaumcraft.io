@@ -486,32 +486,36 @@ function positionAspectsPanel() {
   // Панель справа от самой правой клетки + отступ
   const panelLeft = maxPixelX + gap;
   
-  // Даём панели отобразиться, чтобы получить её реальную ширину
+  // Получаем количество столбцов в таблице
+  const columns = Math.ceil(ALL_ASPECTS.length / 5);
+  const cellWidth = 68; // ширина одной ячейки (60px + gap 8px)
+  const tableWidth = columns * cellWidth;
+  
+  // Доступное место справа от сетки
+  const availableWidth = window.innerWidth - panelLeft - 10;
+  
+  // Определяем, нужна ли прокрутка
+  const needsScroll = tableWidth > availableWidth;
+  
+  // Устанавливаем позицию и ширину панели
   panel.style.position = 'fixed';
   panel.style.left = `${panelLeft}px`;
-  panel.style.top = '0px';
-  panel.style.width = 'auto';
   panel.style.display = 'block';
   
-  // Получаем реальную ширину панели
-  const panelActualWidth = panel.offsetWidth;
-  
-  // Проверяем, помещается ли панель справа
-  if (panelLeft + panelActualWidth > window.innerWidth - 10) {
-    const maxWidth = window.innerWidth - panelLeft - 10;
-    if (maxWidth > 0) {
-      panel.style.width = `${maxWidth}px`;
-      grid.style.overflowX = 'auto';
-    } else {
-      panel.style.display = 'none';
-      return;
-    }
+  if (needsScroll) {
+    // Если не помещается - фиксированная ширина и прокрутка
+    const maxWidth = Math.max(150, availableWidth);
+    panel.style.width = `${maxWidth}px`;
+    grid.style.overflowX = 'auto';
+    grid.style.width = '100%';
   } else {
+    // Если помещается - ширина по содержимому
     panel.style.width = 'auto';
     grid.style.overflowX = 'visible';
+    grid.style.width = 'fit-content';
   }
   
-  // Высота: 5 строк по 60px + отступы (gap 8px * 4 = 32px) + padding
+  // Высота: 5 строк по 60px + отступы (gap 8px * 4 = 32px)
   const rowHeight = 60;
   const gapSize = 8;
   const rows = 5;
@@ -526,19 +530,26 @@ function positionAspectsPanel() {
   grid.style.maxHeight = `${gridHeight}px`;
   grid.style.overflowY = 'hidden';
 }
-
 // Горизонтальная прокрутка таблицы колесиком мыши
 function initTableScroll() {
-  const panel = document.getElementById('aspects-panel');
-  if (!panel) return;
+  const grid = document.querySelector('.aspects-grid');
+  if (!grid) return;
   
-  panel.addEventListener('wheel', (e) => {
-    if (e.deltaY !== 0) {
+  // Удаляем старый обработчик, если был
+  grid.removeEventListener('wheel', grid._wheelHandler);
+  
+  // Создаём новый обработчик
+  grid._wheelHandler = (e) => {
+    // Если есть горизонтальная прокрутка и нужно прокрутить
+    if (grid.scrollWidth > grid.clientWidth && e.deltaY !== 0) {
       e.preventDefault();
-      panel.scrollLeft += e.deltaY;
+      grid.scrollLeft += e.deltaY;
     }
-  });
+  };
+  
+  grid.addEventListener('wheel', grid._wheelHandler);
 }
+
 // ========== ГЛОБАЛЬНЫЙ ТУЛТИП ДЛЯ ТАБЛИЦЫ ==========
 function initGlobalTooltip() {
   const tooltip = document.getElementById('global-tooltip');
