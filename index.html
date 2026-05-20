@@ -41,7 +41,7 @@
       font-weight: bold;
       color: #bbd9ff;
     }
-    input, select, button, textarea {
+    input, button, textarea {
       width: 100%;
       margin-top: 5px;
       padding: 6px 10px;
@@ -120,23 +120,91 @@
       transition: opacity 0.1s;
       opacity: 0;
     }
+
+    /* Стили для кастомного выпадающего списка с иконками */
+    .custom-select {
+      position: relative;
+      width: 100%;
+      margin-top: 5px;
+    }
+    .select-trigger {
+      width: 100%;
+      padding: 6px 10px;
+      background: #1e2a36;
+      border: 1px solid #3e5a6c;
+      border-radius: 12px;
+      color: white;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .select-trigger img {
+      width: 24px;
+      height: 24px;
+      object-fit: contain;
+    }
+    .select-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      max-height: 300px;
+      overflow-y: auto;
+      background: #1e2a36;
+      border: 1px solid #3e5a6c;
+      border-radius: 12px;
+      margin-top: 4px;
+      z-index: 100;
+      display: none;
+    }
+    .select-dropdown.show {
+      display: block;
+    }
+    .select-option {
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: background 0.1s;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .select-option:hover {
+      background: #2c4c6c;
+    }
+    .select-option img {
+      width: 24px;
+      height: 24px;
+      object-fit: contain;
+    }
+    .select-option.selected {
+      background: #2c6c9e;
+    }
   </style>
 </head>
 <body>
   <div id="ui">
     <div style="display: flex; justify-content: space-between;">
-      <span>🌀 ГЕКС-ИССЛЕДОВАТЕЛЬ v4.0</span>
+      <span>🌀 ГЕКС-ИССЛЕДОВАТЕЛЬ v4.3</span>
       <span style="color:#6eff9e;">умная сеть</span>
     </div>
 
     <label>📐 Радиус сетки:
       <input type="number" id="radiusInput" value="4" min="2" max="9">
     </label>
-    <small>🖱️ ЛКМ: активировать клетку | ПКМ: поставить аспект</small>
+    <small>🖱️ Зажмите ЛКМ и водите: включать/выключать | ПКМ: поставить аспект</small>
 
-    <label>✨ Выбранный аспект:
-      <select id="aspectSelect"></select>
-    </label>
+    <label>✨ Выбранный аспект:</label>
+    <div class="custom-select" id="customSelect">
+      <div class="select-trigger" id="selectTrigger">
+        <img id="selectedIcon" src="" alt="" style="display: none;">
+        <span id="selectedText">aer</span>
+      </div>
+      <div class="select-dropdown" id="selectDropdown"></div>
+    </div>
 
     <button id="calculateBtn">🔗 ПОСТРОИТЬ ОПТИМАЛЬНУЮ СЕТЬ</button>
     <button id="clearBtn">🗑️ Очистить все аспекты</button>
@@ -149,7 +217,7 @@
 
     <div class="import-area">
       <label>📥 Импорт состояния</label>
-      <textarea id="importText" rows="3" placeholder='{"version":"full_aspects_3.2","radius":4,"activeCells":["0,0"],"aspectCells":["0,0:ordo"]}'></textarea>
+      <textarea id="importText" rows="3" placeholder='{"version":"full_aspects_4.3","radius":4,"activeCells":["0,0"],"aspectCells":["0,0:ordo"]}'></textarea>
       <button id="importBtn">📂 Загрузить состояние</button>
     </div>
 
