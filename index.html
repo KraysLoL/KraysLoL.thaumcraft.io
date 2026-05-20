@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Thaumcraft Исследования – Умная сеть аспектов</title>
+  <style>
+    * { user-select: none; margin:0; padding:0; box-sizing:border-box; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: 'Segoe UI', 'Roboto', monospace;
+      background: #0a0f1e;
+    }
+    canvas {
+      display: block;
+      background: #0a0f1e;
+      cursor: crosshair;
+    }
+    #ui {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      color: #f0f0f0;
+      background: rgba(10, 20, 30, 0.94);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 14px 18px;
+      width: 310px;
+      font-size: 13px;
+      font-weight: 500;
+      z-index: 20;
+      border: 1px solid rgba(100, 150, 200, 0.4);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    label {
+      display: block;
+      margin: 8px 0 4px;
+      letter-spacing: 0.5px;
+      font-weight: bold;
+      color: #bbd9ff;
+    }
+    input, select, button, textarea {
+      width: 100%;
+      margin-top: 5px;
+      padding: 6px 10px;
+      background: #1e2a36;
+      border: 1px solid #3e5a6c;
+      color: white;
+      border-radius: 12px;
+      font-weight: 500;
+      transition: 0.1s;
+      box-sizing: border-box;
+    }
+    button {
+      background: #2c4c6c;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button:hover {
+      background: #3e6a90;
+      border-color: #8ab3d0;
+    }
+    textarea {
+      resize: vertical;
+      font-family: monospace;
+      font-size: 10px;
+      background: #010a12;
+      color: #b3ffcc;
+      border: 1px solid #2c6c5e;
+    }
+    #log {
+      margin-top: 12px;
+      font-size: 11px;
+      max-height: 180px;
+      overflow-y: auto;
+      background: #0c121c;
+      border-radius: 12px;
+      padding: 6px 8px;
+      border-left: 3px solid #2c6c9e;
+    }
+    .export-area, .import-area {
+      margin-top: 12px;
+      background: #0f1820;
+      border-radius: 14px;
+      padding: 8px;
+    }
+    .export-area { display: none; }
+    .stat {
+      background: #021018;
+      padding: 5px 8px;
+      border-radius: 30px;
+      text-align: center;
+      margin-top: 8px;
+      font-weight: bold;
+    }
+    hr {
+      border-color: #2f4f6f;
+      margin: 10px 0;
+    }
+    small { font-size: 11px; color: #aac; }
+
+    /* Стили для тултипа */
+    #aspect-tooltip {
+      position: fixed;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(4px);
+      color: #ffecb3;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      font-weight: bold;
+      padding: 6px 12px;
+      border-radius: 20px;
+      border-left: 3px solid #ffaa44;
+      pointer-events: none;
+      z-index: 1000;
+      white-space: nowrap;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      transition: opacity 0.1s;
+      opacity: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <div style="display: flex; justify-content: space-between;">
+      <span>🌀 ГЕКС-ИССЛЕДОВАТЕЛЬ v4.0</span>
+      <span style="color:#6eff9e;">умная сеть</span>
+    </div>
+
+    <label>📐 Радиус сетки:
+      <input type="number" id="radiusInput" value="4" min="2" max="9">
+    </label>
+    <small>🖱️ ЛКМ: активировать клетку | ПКМ: поставить аспект</small>
+
+    <label>✨ Выбранный аспект:
+      <select id="aspectSelect"></select>
+    </label>
+
+    <button id="calculateBtn">🔗 ПОСТРОИТЬ ОПТИМАЛЬНУЮ СЕТЬ</button>
+    <button id="clearBtn">🗑️ Очистить все аспекты</button>
+
+    <button id="exportBtn">💾 Экспорт состояния</button>
+    <div class="export-area" id="exportArea">
+      <textarea id="exportText" rows="3"></textarea>
+      <button id="copyBtn">📋 Скопировать JSON</button>
+    </div>
+
+    <div class="import-area">
+      <label>📥 Импорт состояния</label>
+      <textarea id="importText" rows="3" placeholder='{"version":"full_aspects_3.2","radius":4,"activeCells":["0,0"],"aspectCells":["0,0:ordo"]}'></textarea>
+      <button id="importBtn">📂 Загрузить состояние</button>
+    </div>
+
+    <div class="stat">🎯 Активных клеток: <span id="activeCount">0</span></div>
+    <div id="log">✨ Полная база аспектов (TC + аддоны). Соединение любого числа аспектов с оптимальными путями.</div>
+  </div>
+
+  <canvas id="hexCanvas"></canvas>
+
+  <!-- Тултип для названия аспекта -->
+  <div id="aspect-tooltip"></div>
+
+  <script src="grid.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
