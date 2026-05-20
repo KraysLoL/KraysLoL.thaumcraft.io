@@ -133,13 +133,16 @@ function clearGeneratedAspects() {
       cleared++;
     }
   }
+  clearUsedAspectsHighlight();
   if (cleared > 0) {
     redraw();
+    scheduleTableRefresh();  // добавляем
     log(`🧹 Удалено ${cleared} автоматически созданных аспектов.`, 'info');
   }
 }
 
 function connectAllAspects() {
+  clearUsedAspectsHighlight();  // очищаем предыдущую подсветку
   chainCache.clear();
   clearPathCache();
   clearGeneratedAspects();
@@ -210,7 +213,7 @@ function connectAllAspects() {
       usedLength = targetLen;
       break;
     }
-    
+    addUsedAspects(finalChain);
     if (!finalPath || !finalChain) {
       log(`Не удалось соединить ${best.fromAsp} → ${best.toAsp} даже с удлинением`, "error");
       network.add(best.toKey);
@@ -256,6 +259,7 @@ function connectAllAspects() {
   }
   
   redraw();
+  scheduleTableRefresh();  // вместо refreshAspectsTable()
   log(`✅ Готово. Добавлено новых аспектов: ${totalAdded}`, "success");
 }
 
@@ -264,10 +268,11 @@ function clearAllAspects() {
     cell.aspect = null;
     cell.generated = false;
   }
+  clearUsedAspectsHighlight();
   redraw();
+  scheduleTableRefresh();  // добавляем
   log('🧹 Все аспекты (и ручные, и автоматические) удалены.', 'info');
 }
-
 function exportState() {
   const activeCells = [];
   const aspectCells = [];
@@ -364,6 +369,215 @@ function log(msg, type = 'info') {
   logDiv.scrollTop = logDiv.scrollHeight;
 }
 
+// ========== ТАБЛИЦА АСПЕКТОВ ==========
+let currentUsedAspects = new Set();
+let currentUserAspects = new Set();
+let isTableInitialized = false;
+
+function updateAspectsTable() {
+  const container = document.getElementById('aspects-grid');
+  if (!container) return;
+  
+  // Собираем актуальные аспекты с поля
+  const userAspects = new Set();
+  
+  for (const cell of gridState.values()) {
+    if (cell.aspect && !cell.generated) {
+      userAspects.add(cell.aspect);
+    }
+  }
+  
+  currentUserAspects = userAspects;
+  
+  // Строим таблицу с 5 строками (по 5 аспектов в столбце)
+  container.innerHTML = '';
+  
+  const COLUMN_SIZE = 5;
+  const columns = Math.ceil(ALL_ASPECTS.length / COLUMN_SIZE);
+  
+  for (let col = 0; col < columns; col++) {
+    for (let row = 0; row < COLUMN_SIZE; row++) {
+      const index = row + col * COLUMN_SIZE;
+      if (index >= ALL_ASPECTS.length) continue;
+      
+      const aspect = ALL_ASPECTS[index];
+      const isUsed = currentUsedAspects.has(aspect);
+      const isUser = userAspects.has(aspect);
+      
+      const div = document.createElement('div');
+      div.className = 'aspect-item';
+      div.setAttribute('data-aspect', aspect);
+      
+      if (isUsed && isUser) {
+        div.classList.add('both');
+      } else if (isUsed) {
+        div.classList.add('used');
+      } else if (isUser) {
+        div.classList.add('user-placed');
+      }
+      
+      const img = document.createElement('img');
+      const aspectImg = aspectImages.get(aspect);
+      if (aspectImg && aspectImg.src) {
+        img.src = aspectImg.src;
+      } else {
+        img.style.display = 'none';
+        div.style.backgroundColor = 'rgba(60, 60, 80, 0.5)';
+        const fallback = document.createElement('span');
+        fallback.textContent = aspect.substring(0, 2);
+        fallback.style.color = '#ddd';
+        fallback.style.fontSize = '10px';
+        fallback.style.fontWeight = 'bold';
+        div.appendChild(fallback);
+      }
+      img.alt = aspect;
+      
+      if (aspectImg && aspectImg.src) {
+        div.appendChild(img);
+      }
+      
+      div.addEventListener('click', (function(a) {
+        return function() {
+          currentAspect = a;
+          const selectedText = document.getElementById('selectedText');
+          const selectedIcon = document.getElementById('selectedIcon');
+          if (selectedText) selectedText.textContent = a;
+          if (selectedIcon) {
+            const icon = aspectImages.get(a);
+            if (icon && icon.src) {
+              selectedIcon.src = icon.src;
+              selectedIcon.style.display = 'inline';
+            } else {
+              selectedIcon.style.display = 'none';
+            }
+          }
+          const dropdown = document.getElementById('selectDropdown');
+          if (dropdown) dropdown.classList.remove('show');
+          log(`✨ Выбран аспект "${a}" из таблицы`, 'info');
+        };
+      })(aspect));
+      
+      container.appendChild(div);
+    }
+  }
+}
+function positionAspectsPanel() {
+  const panel = document.getElementById('aspects-panel');
+  const grid = document.querySelector('.aspects-grid');
+  if (!panel || !grid) return;
+  
+  let maxPixelX = -Infinity;
+  for (const [key] of gridState) {
+    const [x, y] = key.split(',').map(Number);
+    const { px } = hexToPixel(x, y);
+    if (px > maxPixelX) maxPixelX = px;
+  }
+  
+  if (maxPixelX === -Infinity) return;
+  
+  const hexWidth = HEX_SIZE * 1.5;
+  const gap = hexWidth;
+  const panelLeft = maxPixelX + gap;
+  let panelWidth = window.innerWidth - panelLeft - 10;
+  if (panelWidth < 150) panelWidth = 150;
+  
+  // Размер ячейки теперь 56px
+  const cellSize = 56;
+  const gridHeight = 5 * cellSize + 20;
+  const panelHeight = gridHeight + 40;
+  const panelTop = Math.max(10, (window.innerHeight - panelHeight) / 2);
+  
+  panel.style.position = 'fixed';
+  panel.style.left = `${panelLeft}px`;
+  panel.style.top = `${panelTop}px`;
+  panel.style.width = `${panelWidth}px`;
+  panel.style.height = `${panelHeight}px`;
+  panel.style.overflow = 'visible';
+  panel.style.display = 'block';
+  
+  grid.style.maxHeight = `${gridHeight}px`;
+  grid.style.overflowX = 'auto';
+  grid.style.overflowY = 'hidden';
+}
+// Горизонтальная прокрутка таблицы колесиком мыши
+function initTableScroll() {
+  const panel = document.getElementById('aspects-panel');
+  if (!panel) return;
+  
+  panel.addEventListener('wheel', (e) => {
+    if (e.deltaY !== 0) {
+      e.preventDefault();
+      panel.scrollLeft += e.deltaY;
+    }
+  });
+}
+// ========== ГЛОБАЛЬНЫЙ ТУЛТИП ДЛЯ ТАБЛИЦЫ ==========
+function initGlobalTooltip() {
+  const tooltip = document.getElementById('global-tooltip');
+  if (!tooltip) return;
+  
+  function showTooltip(text, x, y) {
+    tooltip.textContent = text;
+    tooltip.style.display = 'block';
+    tooltip.style.left = (x + 15) + 'px';
+    tooltip.style.top = (y - 35) + 'px';
+  }
+  
+  function hideTooltip() {
+    tooltip.style.display = 'none';
+  }
+  
+  // Делегирование событий на контейнере таблицы
+  const container = document.getElementById('aspects-grid');
+  if (!container) return;
+  
+  container.addEventListener('mouseover', (e) => {
+    const aspectItem = e.target.closest('.aspect-item');
+    if (aspectItem) {
+      const aspect = aspectItem.getAttribute('data-aspect');
+      if (aspect) {
+        const rect = aspectItem.getBoundingClientRect();
+        showTooltip(aspect, rect.left + rect.width / 2, rect.top);
+      }
+    }
+  });
+  
+  container.addEventListener('mouseout', (e) => {
+    const aspectItem = e.target.closest('.aspect-item');
+    if (aspectItem) {
+      hideTooltip();
+    }
+  });
+}
+
+
+// Вызываем после обновления таблицы
+function refreshAspectsTable() {
+  updateAspectsTable();
+  positionAspectsPanel();
+  initGlobalTooltip();  // переинициализируем тултип после обновления
+}
+
+// Вызываем после загрузки страницы и после каждого изменения сетки
+function scheduleTableRefresh() {
+  setTimeout(() => {
+    refreshAspectsTable();
+    initTableScroll();  // добавляем
+  }, 50);
+}
+
+// Очищаем подсветку использованных аспектов
+function clearUsedAspectsHighlight() {
+  currentUsedAspects.clear();
+  updateAspectsTable();
+}
+
+// Добавляем аспекты в список использованных
+function addUsedAspects(aspectsList) {
+  aspectsList.forEach(aspect => currentUsedAspects.add(aspect));
+  updateAspectsTable();
+}
+
 function loadAspectImages() {
   let loadedCount = 0;
   ALL_ASPECTS.forEach(aspect => {
@@ -374,19 +588,23 @@ function loadAspectImages() {
       loadedCount++;
       redraw();
       if (loadedCount === ALL_ASPECTS.length) {
-        log(`🖼️ Загружены все иконки аспектов (${loadedCount})`, 'success');
-        // После загрузки всех иконок инициализируем кастомный select
-        initCustomSelect();
-      }
+  log(`🖼️ Загружены все иконки аспектов (${loadedCount})`, 'success');
+  initCustomSelect();
+  scheduleTableRefresh();  // вместо refreshAspectsTable()
+}
     };
     img.onerror = () => {
       // Если иконка не найдена, используем текстовый fallback
       aspectImages.set(aspect, null);
       loadedCount++;
       if (loadedCount === ALL_ASPECTS.length) {
-        log(`🖼️ Загружено ${loadedCount} аспектов (некоторые без иконок)`, 'info');
-        initCustomSelect();
-      }
+  log(`🖼️ Загружены все иконки аспектов (${loadedCount})`, 'success');
+  initCustomSelect();
+  // Даём время на отрисовку иконок
+  setTimeout(() => {
+    refreshAspectsTable();
+  }, 100);
+}
     };
   });
 }
@@ -584,14 +802,15 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('importBtn').addEventListener('click', importState);
   
   radiusInput.addEventListener('change', () => {
-    let newRadius = parseInt(radiusInput.value, 10);
-    if (isNaN(newRadius) || newRadius < 2) newRadius = 2;
-    if (newRadius > 9) newRadius = 9;
-    generateGrid(newRadius);
-    clearPathCache();
-    redraw();
-    log(`🌐 Радиус изменён на ${newRadius}.`, 'info');
-  });
+  let newRadius = parseInt(radiusInput.value, 10);
+  if (isNaN(newRadius) || newRadius < 2) newRadius = 2;
+  if (newRadius > 9) newRadius = 9;
+  generateGrid(newRadius);
+  clearPathCache();
+  redraw();
+  scheduleTableRefresh();  // вместо refreshAspectsTable()
+  log(`🌐 Радиус изменён на ${newRadius}.`, 'info');
+});
   
   // Обработчики кастомного select
   const selectTrigger = document.getElementById('selectTrigger');
@@ -612,3 +831,7 @@ document.addEventListener('DOMContentLoaded', () => {
   log(`📚 Загружено аспектов: ${ALL_ASPECTS.length} (все аддоны).`, 'success');
   log(`💡 Зажмите ЛКМ и водите по клеткам, чтобы включать/выключать их. ПКМ для установки аспекта.`, 'info');
 });
+
+// Экспортируем для использования в grid.js
+window.scheduleTableRefresh = scheduleTableRefresh;
+window.refreshAspectsTable = refreshAspectsTable;
