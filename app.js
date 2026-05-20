@@ -1,5 +1,4 @@
-// app.js – логика аспектов, интерфейс, импорт/экспорт, загрузка изображений
-// Версия 4.3 с поддержкой зажатой ЛКМ для массового включения/выключения клеток
+// app.js – полная исправленная версия с кастомным select и подсветкой аспектов
 
 // ---------- Рецепты аспектов ----------
 const FULL_ASPECT_RECIPES = {
@@ -25,7 +24,7 @@ const FULL_ASPECT_RECIPES = {
 };
 
 const chainCache = new Map();
-const connectionCache = new Map();   // кэш для путей по клеткам
+const connectionCache = new Map();
 
 const ASPECT_RECIPES = { ...FULL_ASPECT_RECIPES };
 window.ASPECT_RECIPES = ASPECT_RECIPES;
@@ -76,7 +75,6 @@ function findAspectChainOfLength(startAsp, endAsp, exactLength, graph) {
   return null;
 }
 
-// Поиск пути по клеткам ТОЧНО заданной длины с кэшированием и оптимизированным visited
 function findPathOfExactLength(startKey, endKey, exactEdges) {
   if (exactEdges === 0 && startKey === endKey) return [startKey];
   
@@ -122,12 +120,10 @@ function findPathOfExactLength(startKey, endKey, exactEdges) {
   return null;
 }
 
-// Сброс кэша путей (например, при изменении сетки)
 function clearPathCache() {
   connectionCache.clear();
 }
 
-// Очистка только сгенерированных аспектов (оставляя пользовательские)
 function clearGeneratedAspects() {
   let cleared = 0;
   for (const cell of gridState.values()) {
@@ -143,13 +139,11 @@ function clearGeneratedAspects() {
   }
 }
 
-// Основная функция соединения с поддержкой флага generated
 function connectAllAspects() {
-  chainCache.clear();         // сброс кэша цепочек аспектов
-  clearPathCache();           // сброс кэша путей по клеткам (актуально после изменений сетки)
-  clearGeneratedAspects();    // удаляем только предыдущие автоматические аспекты
+  chainCache.clear();
+  clearPathCache();
+  clearGeneratedAspects();
   
-  // Собираем все размещённые пользовательские аспекты (не generated)
   const placed = [];
   for (const [key, cell] of gridState) {
     if (cell.aspect && !cell.generated) {
@@ -238,14 +232,12 @@ function connectAllAspects() {
       const cell = gridState.get(cells[i]);
       if (!cell.aspect) {
         cell.aspect = aspects[i];
-        cell.generated = true;   // помечаем как автоматически созданный
+        cell.generated = true;
         totalAdded++;
       } else if (!cell.generated && cell.aspect !== aspects[i]) {
-        // Пользовательский аспект на пути – конфликт, пропускаем (или можно перезаписать, но лучше предупредить)
         log(`Конфликт: на ${cells[i]} уже есть пользовательский аспект ${cell.aspect}, пропускаем`, "warn");
         continue;
       } else if (cell.generated && cell.aspect !== aspects[i]) {
-        // Перезаписываем старый сгенерированный аспект
         cell.aspect = aspects[i];
       }
     }
@@ -255,7 +247,6 @@ function connectAllAspects() {
       network.add(key);
     }
     
-    // удаляем только конечный аспект
     const targetIndex = remaining.findIndex(x => x.key === best.toKey);
     if (targetIndex !== -1) {
       remaining.splice(targetIndex, 1);
@@ -268,7 +259,6 @@ function connectAllAspects() {
   log(`✅ Готово. Добавлено новых аспектов: ${totalAdded}`, "success");
 }
 
-// Очистка всех аспектов (и пользовательских, и сгенерированных)
 function clearAllAspects() {
   for (const cell of gridState.values()) {
     cell.aspect = null;
@@ -278,7 +268,6 @@ function clearAllAspects() {
   log('🧹 Все аспекты (и ручные, и автоматические) удалены.', 'info');
 }
 
-// Экспорт/импорт (оставляем как есть, но флаг generated не сохраняем)
 function exportState() {
   const activeCells = [];
   const aspectCells = [];
@@ -323,7 +312,6 @@ function importState() {
   generateGrid(radius);
   document.getElementById('radiusInput').value = radius;
   
-  // Очищаем все аспекты перед импортом
   for (const cell of gridState.values()) {
     cell.aspect = null;
     cell.generated = false;
@@ -346,7 +334,7 @@ function importState() {
         const cell = gridState.get(key);
         cell.active = true;
         cell.aspect = aspect;
-        cell.generated = false;   // импортированные считаются пользовательскими
+        cell.generated = false;
       } else {
         log(`⚠️ Не удалось разместить ${item}.`, 'warn');
       }
@@ -376,7 +364,6 @@ function log(msg, type = 'info') {
   logDiv.scrollTop = logDiv.scrollHeight;
 }
 
-// Загрузка изображений (без изменений)
 function loadAspectImages() {
   let loadedCount = 0;
   ALL_ASPECTS.forEach(aspect => {
@@ -386,17 +373,88 @@ function loadAspectImages() {
       aspectImages.set(aspect, img);
       loadedCount++;
       redraw();
-      if (loadedCount === 1) log(`🖼️ Загружены иконки аспектов из папки color/`, 'success');
+      if (loadedCount === ALL_ASPECTS.length) {
+        log(`🖼️ Загружены все иконки аспектов (${loadedCount})`, 'success');
+        // После загрузки всех иконок инициализируем кастомный select
+        initCustomSelect();
+      }
     };
-    img.onerror = () => {};
+    img.onerror = () => {
+      // Если иконка не найдена, используем текстовый fallback
+      aspectImages.set(aspect, null);
+      loadedCount++;
+      if (loadedCount === ALL_ASPECTS.length) {
+        log(`🖼️ Загружено ${loadedCount} аспектов (некоторые без иконок)`, 'info');
+        initCustomSelect();
+      }
+    };
   });
+}
+
+// ========== КАСТОМНЫЙ SELECT С ИКОНКАМИ ==========
+let currentAspect = 'aer';
+
+function initCustomSelect() {
+  const selectDropdown = document.getElementById('selectDropdown');
+  const selectedText = document.getElementById('selectedText');
+  const selectedIcon = document.getElementById('selectedIcon');
+  
+  if (!selectDropdown) return;
+  
+  selectDropdown.innerHTML = '';
+  
+  ALL_ASPECTS.forEach(aspect => {
+    const option = document.createElement('div');
+    option.className = 'select-option';
+    if (aspect === currentAspect) option.classList.add('selected');
+    
+    const img = document.createElement('img');
+    const iconImg = aspectImages.get(aspect);
+    if (iconImg) {
+      img.src = iconImg.src;
+      img.style.width = '24px';
+      img.style.height = '24px';
+    } else {
+      img.style.display = 'none';
+    }
+    img.alt = aspect;
+    
+    const text = document.createElement('span');
+    text.textContent = aspect;
+    
+    option.appendChild(img);
+    option.appendChild(text);
+    
+    option.addEventListener('click', () => {
+      currentAspect = aspect;
+      selectedText.textContent = aspect;
+      const selectedIconImg = aspectImages.get(aspect);
+      if (selectedIconImg) {
+        selectedIcon.src = selectedIconImg.src;
+        selectedIcon.style.display = 'inline';
+      } else {
+        selectedIcon.style.display = 'none';
+      }
+      
+      document.querySelectorAll('.select-option').forEach(opt => opt.classList.remove('selected'));
+      option.classList.add('selected');
+      
+      selectDropdown.classList.remove('show');
+    });
+    
+    selectDropdown.appendChild(option);
+  });
+  
+  selectedText.textContent = currentAspect;
+  const firstIcon = aspectImages.get(currentAspect);
+  if (firstIcon) {
+    selectedIcon.src = firstIcon.src;
+    selectedIcon.style.display = 'inline';
+  }
 }
 
 // Инициализация
 document.addEventListener('DOMContentLoaded', () => {
-  const aspectSelect = document.getElementById('aspectSelect');
-  aspectSelect.innerHTML = ALL_ASPECTS.map(a => `<option value="${a}">${a}</option>`).join('');
-  
   const radiusInput = document.getElementById('radiusInput');
   radiusInput.value = currentRadius;
   
@@ -405,9 +463,9 @@ document.addEventListener('DOMContentLoaded', () => {
   redraw();
   loadAspectImages();
   
-  // ========== НОВАЯ ЛОГИКА: зажатая ЛКМ меняет состояние клеток ==========
+  // ========== ЛОГИКА ЗАЖАТОЙ ЛКМ ==========
   let isMouseDown = false;
-  let currentMode = null; // 'activate' или 'deactivate'
+  let currentMode = null;
   
   function updateCellState(key) {
     if (!gridState.has(key)) return;
@@ -425,7 +483,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   
   canvas.addEventListener('mousedown', (e) => {
-    if (e.button === 0) { // ЛКМ
+    if (e.button === 0) {
       isMouseDown = true;
       
       const rect = canvas.getBoundingClientRect();
@@ -438,7 +496,6 @@ document.addEventListener('DOMContentLoaded', () => {
       
       if (gridState.has(key)) {
         const cell = gridState.get(key);
-        // Определяем режим: если клетка активна, то будем выключать, иначе включать
         currentMode = cell.active ? 'deactivate' : 'activate';
         updateCellState(key);
       }
@@ -465,7 +522,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateCellState(key);
   });
   
-  // ========== ТУЛТИП ПРИ НАВЕДЕНИИ ==========
+  // ========== ТУЛТИП ==========
   const tooltip = document.getElementById('aspect-tooltip');
   
   canvas.addEventListener('mousemove', (e) => {
@@ -492,7 +549,7 @@ document.addEventListener('DOMContentLoaded', () => {
     tooltip.style.opacity = '0';
   });
   
-  // ========== ПРАВАЯ КНОПКА МЫШИ (установка аспекта) ==========
+  // ========== ПКМ (установка аспекта) ==========
   canvas.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
@@ -504,7 +561,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const key = `${hex.x},${hex.y}`;
     const cell = gridState.get(key);
     if (cell && cell.active) {
-      cell.aspect = aspectSelect.value;
+      cell.aspect = currentAspect;
       cell.generated = false;
       redraw();
       log(`📌 Установлен "${cell.aspect}" на (${hex.x},${hex.y})`, 'info');
@@ -514,7 +571,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return false;
   });
   
-  // ========== КНОПКИ ИНТЕРФЕЙСА ==========
+  // ========== КНОПКИ ==========
   document.getElementById('calculateBtn').addEventListener('click', connectAllAspects);
   document.getElementById('clearBtn').addEventListener('click', clearAllAspects);
   document.getElementById('exportBtn').addEventListener('click', exportState);
@@ -531,9 +588,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isNaN(newRadius) || newRadius < 2) newRadius = 2;
     if (newRadius > 9) newRadius = 9;
     generateGrid(newRadius);
-    clearPathCache();      // сброс кэша путей при смене радиуса
+    clearPathCache();
     redraw();
     log(`🌐 Радиус изменён на ${newRadius}.`, 'info');
+  });
+  
+  // Обработчики кастомного select
+  const selectTrigger = document.getElementById('selectTrigger');
+  const selectDropdown = document.getElementById('selectDropdown');
+  
+  if (selectTrigger) {
+    selectTrigger.addEventListener('click', () => {
+      selectDropdown.classList.toggle('show');
+    });
+  }
+  
+  document.addEventListener('click', (e) => {
+    if (selectTrigger && !selectTrigger.contains(e.target) && selectDropdown && !selectDropdown.contains(e.target)) {
+      selectDropdown.classList.remove('show');
+    }
   });
   
   log(`📚 Загружено аспектов: ${ALL_ASPECTS.length} (все аддоны).`, 'success');
