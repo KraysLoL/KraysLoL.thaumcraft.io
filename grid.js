@@ -220,7 +220,8 @@ function resizeCanvas() {
 window.addEventListener('resize', () => {
   resizeCanvas();
   if (window.scheduleTableRefresh) {
-    setTimeout(() => window.scheduleTableRefresh(), 50);
+    // Небольшая задержка для завершения отрисовки
+    setTimeout(() => window.scheduleTableRefresh(), 100);
   }
 });
 
