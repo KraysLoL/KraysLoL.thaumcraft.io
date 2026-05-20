@@ -58,7 +58,7 @@ function generateGrid(radius) {
     const yMin = Math.max(-radius, -radius - x);
     const yMax = Math.min(radius, radius - x);
     for (let y = yMin; y <= yMax; y++) {
-      gridState.set(`${x},${y}`, { active: true, aspect: null });  // ← true вместо false
+      gridState.set(`${x},${y}`, { active: false, aspect: null });
     }
   }
   currentRadius = radius;
@@ -97,20 +97,41 @@ function drawHexagon(cx, cy, cell) {
     else ctx.lineTo(x, y);
   }
   ctx.closePath();
-  ctx.fillStyle = cell.active ? 'rgba(80, 220, 100, 0.45)' : 'rgba(210, 230, 255, 0.05)';
+  
+  // Заливка: активные клетки с разным оттенком в зависимости от типа аспекта
+  if (cell.active) {
+    if (cell.aspect && !cell.generated) {
+      // Пользовательский аспект - жёлтая подсветка
+      ctx.fillStyle = 'rgba(220, 180, 80, 0.45)';
+    } else if (cell.aspect && cell.generated) {
+      // Автоматический аспект - зелёная подсветка
+      ctx.fillStyle = 'rgba(80, 220, 100, 0.45)';
+    } else {
+      // Активная клетка без аспекта - обычная подсветка
+      ctx.fillStyle = 'rgba(80, 220, 100, 0.25)';
+    }
+  } else {
+    ctx.fillStyle = 'rgba(210, 230, 255, 0.05)';
+  }
   ctx.fill();
-  ctx.strokeStyle = cell.active ? '#aaffaa' : '#5a6e7c';
-  ctx.lineWidth = 1.2;
+  
+  // Обводка: разные цвета для разных типов
+  if (cell.aspect && !cell.generated) {
+    ctx.strokeStyle = '#ffcc55';  // жёлтая обводка для пользовательских
+  } else if (cell.aspect && cell.generated) {
+    ctx.strokeStyle = '#88ff88';  // зелёная обводка для автоматических
+  } else {
+    ctx.strokeStyle = cell.active ? '#aaffaa' : '#5a6e7c';
+  }
+  ctx.lineWidth = 1.5;
   ctx.stroke();
 
   if (cell.aspect) {
     const img = aspectImages.get(cell.aspect);
     if (img) {
-      // Рисуем картинку вместо текста
-      const imgSize = HEX_SIZE * 1.2;  // чуть больше гекса для красоты
+      const imgSize = HEX_SIZE * 1.2;
       ctx.drawImage(img, cx - imgSize/2, cy - imgSize/2, imgSize, imgSize);
     } else {
-      // Fallback – текст
       ctx.fillStyle = '#ffffcc';
       ctx.font = `bold ${HEX_SIZE * 0.52}px "Segoe UI", "Courier New", monospace`;
       ctx.textAlign = 'center';
