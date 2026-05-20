@@ -17,10 +17,9 @@ const FULL_ASPECT_RECIPES = {
   "telum": ["instrumentum","ignis"], "tutamen": ["instrumentum","terra"], "fames": ["victus","vacuos"],
   "lucrum": ["humanus","fames"], "fabrico": ["humanus","instrumentum"], "pannus": ["instrumentum","bestia"],
   "machina": ["motus","instrumentum"], "vinculum": ["motus","perditio"], "tempestas": ["aer","aqua"],
-  "granum": ["victus","ordo"], "saxum": ["terra","terra"], "caelum": ["vitreus","metallum"],
   "tempus": ["vacuos","ordo"], "gula": ["fames","vacuos"], "infernus": ["ignis","praecantatio"],
   "ira": ["telum","ignis"], "luxuria": ["corpus","fames"], "superbia": ["volatus","vacuos"],
-  "desidia": ["vinculum","spiritus"], "invidia": ["sensus","fames"]
+  "desidia": ["vinculum","spiritus"], "invidia": ["sensus","fames"], "terminus": ["lucrum","alienis"]
 };
 
 const chainCache = new Map();
@@ -346,6 +345,7 @@ function importState() {
     }
   }
   redraw();
+  scheduleTableRefresh();  // ДОБАВИТЬ ЭТУ СТРОКУ
   log(`📥 Состояние загружено (радиус ${radius})`, 'success');
 }
 
@@ -466,39 +466,67 @@ function positionAspectsPanel() {
   const grid = document.querySelector('.aspects-grid');
   if (!panel || !grid) return;
   
+  // Находим самую правую клетку сетки
   let maxPixelX = -Infinity;
+  
   for (const [key] of gridState) {
     const [x, y] = key.split(',').map(Number);
     const { px } = hexToPixel(x, y);
-    if (px > maxPixelX) maxPixelX = px;
+    if (px > maxPixelX) {
+      maxPixelX = px;
+    }
   }
   
   if (maxPixelX === -Infinity) return;
   
+  // Размер гекса и отступ в 1 клетку
   const hexWidth = HEX_SIZE * 1.5;
   const gap = hexWidth;
-  const panelLeft = maxPixelX + gap;
-  let panelWidth = window.innerWidth - panelLeft - 10;
-  if (panelWidth < 150) panelWidth = 150;
   
-  // Размер ячейки теперь 56px
-  const cellSize = 56;
-  const gridHeight = 5 * cellSize + 20;
+  // Панель справа от самой правой клетки + отступ
+  const panelLeft = maxPixelX + gap;
+  
+  // Даём панели отобразиться, чтобы получить её реальную ширину
+  panel.style.position = 'fixed';
+  panel.style.left = `${panelLeft}px`;
+  panel.style.top = '0px';
+  panel.style.width = 'auto';
+  panel.style.display = 'block';
+  
+  // Получаем реальную ширину панели
+  const panelActualWidth = panel.offsetWidth;
+  
+  // Проверяем, помещается ли панель справа
+  if (panelLeft + panelActualWidth > window.innerWidth - 10) {
+    const maxWidth = window.innerWidth - panelLeft - 10;
+    if (maxWidth > 0) {
+      panel.style.width = `${maxWidth}px`;
+      grid.style.overflowX = 'auto';
+    } else {
+      panel.style.display = 'none';
+      return;
+    }
+  } else {
+    panel.style.width = 'auto';
+    grid.style.overflowX = 'visible';
+  }
+  
+  // Высота: 5 строк по 60px + отступы (gap 8px * 4 = 32px) + padding
+  const rowHeight = 60;
+  const gapSize = 8;
+  const rows = 5;
+  const gridHeight = rows * rowHeight + (rows - 1) * gapSize + 10;
   const panelHeight = gridHeight + 40;
   const panelTop = Math.max(10, (window.innerHeight - panelHeight) / 2);
   
-  panel.style.position = 'fixed';
-  panel.style.left = `${panelLeft}px`;
   panel.style.top = `${panelTop}px`;
-  panel.style.width = `${panelWidth}px`;
   panel.style.height = `${panelHeight}px`;
   panel.style.overflow = 'visible';
-  panel.style.display = 'block';
   
   grid.style.maxHeight = `${gridHeight}px`;
-  grid.style.overflowX = 'auto';
   grid.style.overflowY = 'hidden';
 }
+
 // Горизонтальная прокрутка таблицы колесиком мыши
 function initTableScroll() {
   const panel = document.getElementById('aspects-panel');
@@ -554,8 +582,11 @@ function initGlobalTooltip() {
 // Вызываем после обновления таблицы
 function refreshAspectsTable() {
   updateAspectsTable();
-  positionAspectsPanel();
-  initGlobalTooltip();  // переинициализируем тултип после обновления
+  // Даём браузеру время на отрисовку таблицы
+  setTimeout(() => {
+    positionAspectsPanel();
+  }, 10);
+  initGlobalTooltip();
 }
 
 // Вызываем после загрузки страницы и после каждого изменения сетки
