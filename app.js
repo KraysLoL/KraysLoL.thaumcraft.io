@@ -1,5 +1,5 @@
 // app.js – логика аспектов, интерфейс, импорт/экспорт, загрузка изображений
-// Версия 4.2 с оптимизациями: кэширование путей, быстрый поиск, разделение пользовательских/сгенерированных аспектов
+// Версия 4.3 с поддержкой зажатой ЛКМ для массового включения/выключения клеток
 
 // ---------- Рецепты аспектов ----------
 const FULL_ASPECT_RECIPES = {
@@ -252,26 +252,14 @@ function connectAllAspects() {
     
     network.add(best.toKey);
     for(const key of finalPath){
-
-    network.add(key);
-
-}
-
-// удаляем только конечный аспект
-
-const targetIndex=
-remaining.findIndex(
-    x=>x.key===best.toKey
-);
-
-if(targetIndex!==-1){
-
-    remaining.splice(
-        targetIndex,
-        1
-    );
-
-}
+      network.add(key);
+    }
+    
+    // удаляем только конечный аспект
+    const targetIndex = remaining.findIndex(x => x.key === best.toKey);
+    if (targetIndex !== -1) {
+      remaining.splice(targetIndex, 1);
+    }
     
     log(`🔗 ${best.fromAsp} → ${best.toAsp} (длина пути ${usedLength} рёбер)`, "info");
   }
@@ -299,7 +287,7 @@ function exportState() {
     if (cell.aspect && !cell.generated) aspectCells.push(`${key}:${cell.aspect}`);
   }
   const data = {
-    version: "full_aspects_4.2",
+    version: "full_aspects_4.3",
     radius: currentRadius,
     activeCells,
     aspectCells
@@ -417,42 +405,116 @@ document.addEventListener('DOMContentLoaded', () => {
   redraw();
   loadAspectImages();
   
-  canvas.addEventListener('click', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
-    const hex = pixelToHex(mouseX, mouseY);
-    const key = `${hex.x},${hex.y}`;
-    if (gridState.has(key)) {
-      const cell = gridState.get(key);
-      cell.active = !cell.active;
-      if (!cell.active) {
-        cell.aspect = null;
-        cell.generated = false;
-      }
+  // ========== НОВАЯ ЛОГИКА: зажатая ЛКМ меняет состояние клеток ==========
+  let isMouseDown = false;
+  let currentMode = null; // 'activate' или 'deactivate'
+  
+  function updateCellState(key) {
+    if (!gridState.has(key)) return;
+    const cell = gridState.get(key);
+    
+    if (currentMode === 'activate' && !cell.active) {
+      cell.active = true;
       redraw();
+    } else if (currentMode === 'deactivate' && cell.active) {
+      cell.active = false;
+      cell.aspect = null;
+      cell.generated = false;
+      redraw();
+    }
+  }
+  
+  canvas.addEventListener('mousedown', (e) => {
+    if (e.button === 0) { // ЛКМ
+      isMouseDown = true;
+      
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const mouseX = (e.clientX - rect.left) * scaleX;
+      const mouseY = (e.clientY - rect.top) * scaleY;
+      const hex = pixelToHex(mouseX, mouseY);
+      const key = `${hex.x},${hex.y}`;
+      
+      if (gridState.has(key)) {
+        const cell = gridState.get(key);
+        // Определяем режим: если клетка активна, то будем выключать, иначе включать
+        currentMode = cell.active ? 'deactivate' : 'activate';
+        updateCellState(key);
+      }
+      e.preventDefault();
     }
   });
   
+  canvas.addEventListener('mouseup', () => {
+    isMouseDown = false;
+    currentMode = null;
+  });
+  
+  canvas.addEventListener('mousemove', (e) => {
+    if (!isMouseDown || currentMode === null) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const mouseX = (e.clientX - rect.left) * scaleX;
+    const mouseY = (e.clientY - rect.top) * scaleY;
+    const hex = pixelToHex(mouseX, mouseY);
+    const key = `${hex.x},${hex.y}`;
+    
+    updateCellState(key);
+  });
+  
+  // ========== ТУЛТИП ПРИ НАВЕДЕНИИ ==========
+  const tooltip = document.getElementById('aspect-tooltip');
+  
+  canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const mouseX = (e.clientX - rect.left) * scaleX;
+    const mouseY = (e.clientY - rect.top) * scaleY;
+    const hex = pixelToHex(mouseX, mouseY);
+    const key = `${hex.x},${hex.y}`;
+    const cell = gridState.get(key);
+    
+    if (cell && cell.aspect) {
+      tooltip.textContent = cell.aspect;
+      tooltip.style.opacity = '1';
+      tooltip.style.left = (e.clientX + 15) + 'px';
+      tooltip.style.top = (e.clientY - 30) + 'px';
+    } else {
+      tooltip.style.opacity = '0';
+    }
+  });
+  
+  canvas.addEventListener('mouseleave', () => {
+    tooltip.style.opacity = '0';
+  });
+  
+  // ========== ПРАВАЯ КНОПКА МЫШИ (установка аспекта) ==========
   canvas.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
-    const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const mouseX = (e.clientX - rect.left) * scaleX;
+    const mouseY = (e.clientY - rect.top) * scaleY;
     const hex = pixelToHex(mouseX, mouseY);
     const key = `${hex.x},${hex.y}`;
     const cell = gridState.get(key);
     if (cell && cell.active) {
       cell.aspect = aspectSelect.value;
-      cell.generated = false;   // ручная установка – пользовательский аспект
+      cell.generated = false;
       redraw();
       log(`📌 Установлен "${cell.aspect}" на (${hex.x},${hex.y})`, 'info');
     } else if (cell && !cell.active) {
-      log(`❌ Сначала активируйте клетку (ЛКМ).`, 'error');
+      log(`❌ Сначала активируйте клетку (зажмите ЛКМ и проведите).`, 'error');
     }
     return false;
   });
   
+  // ========== КНОПКИ ИНТЕРФЕЙСА ==========
   document.getElementById('calculateBtn').addEventListener('click', connectAllAspects);
   document.getElementById('clearBtn').addEventListener('click', clearAllAspects);
   document.getElementById('exportBtn').addEventListener('click', exportState);
@@ -475,33 +537,5 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   
   log(`📚 Загружено аспектов: ${ALL_ASPECTS.length} (все аддоны).`, 'success');
-  log(`💡 Разместите любое количество аспектов на АКТИВНЫХ клетках, затем нажмите "ПОСТРОИТЬ ОПТИМАЛЬНУЮ СЕТЬ".`, 'info');
-  // ========== ТУЛТИП ПРИ НАВЕДЕНИИ ==========
-  const tooltip = document.getElementById('aspect-tooltip');
-  
-  canvas.addEventListener('mousemove', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const mouseX = (e.clientX - rect.left) * scaleX;
-    const mouseY = (e.clientY - rect.top) * scaleY;
-    const hex = pixelToHex(mouseX, mouseY);
-    const key = `${hex.x},${hex.y}`;
-    const cell = gridState.get(key);
-    
-    if (cell && cell.aspect) {
-      // Показываем тултип с названием аспекта
-      tooltip.textContent = cell.aspect;
-      tooltip.style.opacity = '1';
-      tooltip.style.left = (e.clientX + 15) + 'px';
-      tooltip.style.top = (e.clientY - 30) + 'px';
-    } else {
-      // Скрываем тултип
-      tooltip.style.opacity = '0';
-    }
-  });
-  
-  canvas.addEventListener('mouseleave', () => {
-    tooltip.style.opacity = '0';
-  });
+  log(`💡 Зажмите ЛКМ и водите по клеткам, чтобы включать/выключать их. ПКМ для установки аспекта.`, 'info');
 });
