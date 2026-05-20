@@ -58,7 +58,7 @@ function generateGrid(radius) {
     const yMin = Math.max(-radius, -radius - x);
     const yMax = Math.min(radius, radius - x);
     for (let y = yMin; y <= yMax; y++) {
-      gridState.set(`${x},${y}`, { active: false, aspect: null });
+      gridState.set(`${x},${y}`, { active: true, aspect: null });  // ← true вместо false
     }
   }
   currentRadius = radius;
