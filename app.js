@@ -1313,10 +1313,7 @@ const row = Math.round(relY / STEP_Y);
 
 const q = hx;
 
-const hy =
-  q % 2 !== 0
-    ? row - 1
-    : row;
+const hy = row - (Math.abs(q) % 2);
 
 const key = `${q},${hy}`;
 
