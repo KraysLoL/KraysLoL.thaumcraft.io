@@ -2,22 +2,22 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Распознавание аспектов | Отладка</title>
+    <title>Распознавание аспектов (с сигмоидой)</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/ort.min.js"></script>
     <style>
         body { font-family: monospace; background: #0a0f1e; color: #ddd; padding: 20px; }
         canvas { border: 1px solid #3e5a6c; max-width: 100%; }
         .slider { margin: 10px 0; }
         button { background: #2c4c6c; color: white; border: none; padding: 6px 12px; cursor: pointer; }
-        #log { background: #000; padding: 10px; max-height: 300px; overflow: auto; font-size: 11px; }
+        #log { background: #000; padding: 10px; max-height: 400px; overflow: auto; font-size: 11px; }
     </style>
 </head>
 <body>
-<h2>🔍 Отладка ONNX модели</h2>
+<h2>🔍 Распознавание аспектов (с сигмоидой)</h2>
 <input type="file" id="upload" accept="image/*">
-<div class="slider">
-    <label>Порог: <span id="confVal">0.3</span></label>
-    <input type="range" id="conf" min="0.05" max="0.9" step="0.01" value="0.3">
+<div>
+    <label>Порог уверенности: <span id="confVal">0.5</span></label>
+    <input type="range" id="conf" min="0.05" max="0.95" step="0.01" value="0.5">
 </div>
 <canvas id="canvas"></canvas>
 <div id="log"></div>
@@ -28,7 +28,7 @@
     let originalImg = null;
     let canvas = document.getElementById('canvas');
     let ctx = canvas.getContext('2d');
-    let confThreshold = 0.3;
+    let confThreshold = 0.5;
     const IOU_THRESH = 0.45;
 
     document.getElementById('conf').addEventListener('input', (e) => {
@@ -39,16 +39,13 @@
 
     async function init() {
         try {
-            // Загрузка классов
             const resp = await fetch('models/field_class_names.txt');
             const text = await resp.text();
             classNames = text.split(/\r?\n/).filter(l => l.trim());
             log(`✅ Загружено классов: ${classNames.length}`);
-            
-            // Загрузка модели
-            log(`⏳ Загрузка модели...`);
+            log(`⏳ Загрузка модели (около 11 МБ)...`);
             session = await ort.InferenceSession.create('models/field_object_detection.onnx');
-            log(`✅ Модель загружена. Формат входа: ${session.inputNames}, выхода: ${session.outputNames}`);
+            log(`✅ Модель загружена. Вход: ${session.inputNames}, выход: ${session.outputNames}`);
         } catch(e) { log(`❌ Ошибка: ${e.message}`); }
     }
 
@@ -57,6 +54,10 @@
         div.innerHTML += `<div>${msg}</div>`;
         div.scrollTop = div.scrollHeight;
         console.log(msg);
+    }
+
+    function sigmoid(x) {
+        return 1 / (1 + Math.exp(-x));
     }
 
     async function preprocess(img) {
@@ -80,6 +81,10 @@
             data[i*3+1] = imgData.data[i*4+1] / 255;
             data[i*3+2] = imgData.data[i*4+2] / 255;
         }
+        // Диагностика входа
+        let mean = 0;
+        for (let i = 0; i < 100; i++) mean += data[i];
+        log(`📊 Среднее первых 100 входных значений: ${(mean/100).toFixed(4)} (ожидается ~0.5)`);
         return new ort.Tensor('float32', data, [1, 3, size, size]);
     }
 
@@ -97,35 +102,26 @@
     }
 
     function postprocess(outputTensor) {
-        const dims = outputTensor.dims;
-        log(`📐 Размерность выхода: ${dims}`);
-        const numPred = dims[2]; // 8400
+        const dims = outputTensor.dims; // [1,85,8400]
+        const numPred = dims[2];
         const numClasses = dims[1] - 5; // 80
         const data = outputTensor.data;
-        
-        // Выведем первые 20 значений для понимания
-        log(`🔢 Первые 20 значений выхода: ${Array.from(data.slice(0, 20)).map(v=>v.toFixed(4)).join(', ')}`);
-        
-        // Проверим, есть ли большие значения (например, координаты могут быть >1)
-        let maxVal = -Infinity, minVal = Infinity;
-        for (let i = 0; i < Math.min(1000, data.length); i++) {
-            if (data[i] > maxVal) maxVal = data[i];
-            if (data[i] < minVal) minVal = data[i];
-        }
-        log(`📊 Диапазон первых 1000 значений: ${minVal.toFixed(4)} .. ${maxVal.toFixed(4)}`);
+        log(`📐 Размерность: ${dims}`);
         
         const detections = [];
         for (let i = 0; i < numPred; i++) {
-            const cx = data[i];
-            const cy = data[numPred + i];
-            const w = data[2*numPred + i];
-            const h = data[3*numPred + i];
-            const objConf = data[4*numPred + i];
+            // Применяем сигмоиду к координатам, ширине, высоте и объектности
+            const cx = sigmoid(data[i]);                         // 0-й канал
+            const cy = sigmoid(data[numPred + i]);               // 1-й
+            const w = sigmoid(data[2*numPred + i]);              // 2-й
+            const h = sigmoid(data[3*numPred + i]);              // 3-й
+            const objConf = sigmoid(data[4*numPred + i]);        // 4-й
+            
             if (objConf < confThreshold) continue;
             
             let bestClass = -1, bestConf = 0;
             for (let c = 0; c < numClasses; c++) {
-                const clsConf = data[(5 + c)*numPred + i];
+                const clsConf = sigmoid(data[(5 + c)*numPred + i]);
                 if (clsConf > bestConf) {
                     bestConf = clsConf;
                     bestClass = c;
@@ -156,6 +152,7 @@
         canvas.height = imgHeight;
         ctx.drawImage(originalImg, 0, 0);
         for (let d of detections) {
+            // Координаты уже нормализованы [0..1] после sigmoid
             let cx = d.bbox[0] * imgWidth;
             let cy = d.bbox[1] * imgHeight;
             let w = d.bbox[2] * imgWidth;
@@ -164,7 +161,7 @@
             ctx.strokeStyle = '#ffaa44';
             ctx.lineWidth = 2;
             ctx.strokeRect(x, y, w, h);
-            let name = classNames[d.classId] || `cls_${d.classId}`;
+            let name = classNames[d.classId] || `класс_${d.classId}`;
             ctx.fillStyle = '#ffcc88';
             ctx.font = '12px monospace';
             ctx.fillText(`${name} ${(d.confidence*100).toFixed(0)}%`, x, y-2);
@@ -173,21 +170,17 @@
 
     async function recognize(img) {
         if (!session) return;
-        log(`⏳ Распознавание...`);
+        log(`⏳ Обработка изображения ${img.width}x${img.height}...`);
         try {
             const tensor = await preprocess(img);
             const feeds = { images: tensor };
             const output = await session.run(feeds);
             const outTensor = output['output0'];
             const detections = postprocess(outTensor);
-            const scaled = detections.map(d => ({
-                ...d,
-                bbox: [d.bbox[0], d.bbox[1], d.bbox[2], d.bbox[3]] // относительные, 0..1
-            }));
-            drawResults(scaled, img.width, img.height);
-            if (scaled.length === 0) log(`⚠️ Ничего не найдено. Попробуйте снизить порог.`);
-            else log(`🎉 Найдено ${scaled.length} аспектов.`);
-        } catch(e) { log(`❌ Ошибка: ${e.message}`); }
+            drawResults(detections, img.width, img.height);
+            if (detections.length === 0) log(`⚠️ Ничего не найдено. Попробуйте снизить порог.`);
+            else log(`🎉 Найдено ${detections.length} аспектов.`);
+        } catch(e) { log(`❌ Ошибка распознавания: ${e.message}`); }
     }
 
     document.getElementById('upload').addEventListener('change', (e) => {
