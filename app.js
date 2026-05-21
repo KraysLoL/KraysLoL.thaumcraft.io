@@ -1244,7 +1244,11 @@ async function recognizeAspects(img) {
   }
 }
 
-function buildResearchFromDetections(items) {
+function buildResearchFromDetections(
+    items,
+    imgWidth,
+    imgHeight
+) {
   if (!items.length) return;
   const freeCells = items.filter((x) => x.cls === "free_hex").length;
   let radius = 2;
@@ -1267,7 +1271,19 @@ function buildResearchFromDetections(items) {
 
   // сначала активируем все найденные free_hex
   for (const item of items) {
-    const hex = pixelToHex(item.x, item.y);
+    const imgCenterX = imgWidth / 2;
+const imgCenterY = imgHeight / 2;
+
+const relX = item.x - imgCenterX;
+const relY = item.y - imgCenterY;
+
+// масштаб изображения -> координаты игрового поля
+const fieldScale = HEX_SIZE * 1.7;
+
+const worldX = relX / fieldScale + OFFSET_X;
+const worldY = relY / fieldScale + OFFSET_Y;
+
+const hex = pixelToHex(worldX, worldY);
 
     const key = `${hex.x},${hex.y}`;
 
