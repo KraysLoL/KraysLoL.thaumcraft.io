@@ -1,5 +1,69 @@
 // grid.js – отрисовка, геометрия, хранение сетки, поиск пути
+class Grid{
 
+constructor(){
+
+this.radius=4;
+
+this.activeCells=[];
+
+this.aspectCells=[];
+
+window.grid=this;
+
+}
+
+
+
+importRecognition(data){
+
+this.radius=
+data.radius;
+
+this.activeCells=
+data.activeCells;
+
+this.aspectCells=[];
+
+
+for(
+let a of data.aspectCells
+){
+
+let parts=
+a.split(":");
+
+this.aspectCells.push({
+
+cell:parts[0],
+aspect:parts[1]
+
+});
+
+}
+
+
+this.render();
+
+}
+
+
+
+render(){
+
+console.clear();
+
+console.log(
+"IMPORT:"
+);
+
+console.log(
+this.activeCells
+);
+
+console.log(
+this.aspectCells
+);
 const canvas = document.getElementById('hexCanvas');
 const ctx = canvas.getContext('2d');
 
@@ -225,6 +289,13 @@ window.addEventListener('resize', () => {
   }
 });
 
+}
+
+}
+
+
+
+new Grid();
 // Экспорт функций для использования в app.js
 window.gridState = gridState;
 window.generateGrid = generateGrid;
