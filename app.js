@@ -1315,6 +1315,10 @@ const row = Math.round(relY / (STEP_Y * 2));
 
 const hy = row - Math.floor(hx / 2);
 
+if (Math.abs(hx) === 1) {
+  hy -= 1;
+}
+
 const key = `${hx},${hy}`;
 
 console.log({
