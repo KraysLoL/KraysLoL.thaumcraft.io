@@ -1313,7 +1313,7 @@ function buildResearchFromDetections(items, imgWidth, imgHeight) {
 // реальный шаг ряда
 const row = Math.round(relY / (STEP_Y * 2));
 
-const hy = row - Math.floor(hx / 2);
+let hy = row - Math.floor(hx / 2);
 
 if (Math.abs(hx) === 1) {
   hy -= 1;
