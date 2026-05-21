@@ -104,53 +104,85 @@
         return inter / (area1 + area2 - inter);
     }
 
-    function postprocess(outputTensor) {
-        const dims = outputTensor.dims; // [1,85,8400]
-        const numPred = dims[2];
-        const numClasses = dims[1] - 5; // 80
-        const data = outputTensor.data;
-        log(`📐 Размерность: ${dims}`);
-        const detections = [];
-        for (let i = 0; i < numPred; i++) {
-            const cx = sigmoid(data[i]);                         // 0
-            const cy = sigmoid(data[numPred + i]);               // 1
-            const w = sigmoid(data[2*numPred + i]);              // 2
-            const h = sigmoid(data[3*numPred + i]);              // 3
-            const objConf = sigmoid(data[4*numPred + i]);        // 4
-            
-            if (objConf < confThreshold) continue;
-            
-            let bestClass = -1, bestConf = 0;
-            for (let c = 0; c < numClasses; c++) {
-                const clsConf = sigmoid(data[(5 + c)*numPred + i]);
-                if (clsConf > bestConf) {
-                    bestConf = clsConf;
-                    bestClass = c;
+    function postprocess(outputTensor, imgWidth, imgHeight) {
+    const dims = outputTensor.dims;   // [1, 85, 8400]
+    const numPredictions = dims[2];   // 8400
+    const numClasses = dims[1] - 5;   // 80
+
+    // Anchors для YOLOv5 (стандартные для 640px)
+    const anchors = [
+        [10,13], [16,30], [33,23],   // для 80x80
+        [30,61], [62,45], [59,119],  // для 40x40
+        [116,90], [156,198], [373,326] // для 20x20
+    ];
+    // Шаг сетки для каждого масштаба (8400 = 80*80 + 40*40 + 20*20)
+    const gridSteps = [80, 40, 20];
+    const anchorIdx = [0, 3, 6]; // начало anch для каждого масштаба
+
+    const data = outputTensor.data;
+    const detections = [];
+
+    let predOffset = 0;
+    for (let s = 0; s < gridSteps.length; s++) {
+        const gridSize = gridSteps[s];
+        const numGridCells = gridSize * gridSize;
+        const stride = 640 / gridSize;
+        const anchorsThis = anchors.slice(anchorIdx[s], anchorIdx[s] + 3);
+
+        for (let cell = 0; cell < numGridCells; cell++) {
+            const row = Math.floor(cell / gridSize);
+            const col = cell % gridSize;
+            for (let a = 0; a < 3; a++) {
+                const predIndex = predOffset + a * numPredictions;
+                // tx, ty, tw, th, obj_conf, class_scores
+                const tx = data[predIndex + cell];
+                const ty = data[numPredictions + predIndex + cell];
+                const tw = data[2 * numPredictions + predIndex + cell];
+                const th = data[3 * numPredictions + predIndex + cell];
+                const objConf = sigmoid(data[4 * numPredictions + predIndex + cell]);
+
+                if (objConf < confThreshold) continue;
+
+                // Правильное декодирование
+                const cx = (sigmoid(tx) + col) / gridSize;
+                const cy = (sigmoid(ty) + row) / gridSize;
+                const w = (anchorsThis[a][0] * Math.exp(tw)) / 640;
+                const h = (anchorsThis[a][1] * Math.exp(th)) / 640;
+
+                let bestClass = -1, bestClassConf = 0;
+                for (let c = 0; c < numClasses; c++) {
+                    const clsProb = sigmoid(data[(5 + c) * numPredictions + predIndex + cell]);
+                    if (clsProb > bestClassConf) {
+                        bestClassConf = clsProb;
+                        bestClass = c;
+                    }
                 }
+                const confidence = objConf * bestClassConf;
+                if (confidence < confThreshold) continue;
+
+                detections.push({
+                    bbox: [cx, cy, w, h],
+                    confidence: confidence,
+                    classId: bestClass
+                });
             }
-            const confidence = objConf * bestConf;
-            if (confidence < confThreshold) continue;
-            detections.push({ bbox: [cx, cy, w, h], confidence, classId: bestClass });
         }
-        log(`🔍 До NMS: ${detections.length}`);
-        detections.sort((a,b) => b.confidence - a.confidence);
-        const final = [];
-        for (let d of detections) {
-            let keep = true;
-            for (let f of final) {
-                if (iou(d.bbox, f.bbox) > IOU_THRESH) { keep = false; break; }
-            }
-            if (keep) final.push(d);
-        }
-        log(`✅ После NMS: ${final.length}`);
-        if (final.length > 0) {
-            final.forEach(d => {
-                const name = classNames[d.classId] || `класс_${d.classId}`;
-                log(`   - ${name} (${(d.confidence*100).toFixed(1)}%)`);
-            });
-        }
-        return final;
+        predOffset += 3 * numPredictions;
     }
+
+    // NMS (оставьте ваш текущий iou и фильтрацию)
+    detections.sort((a,b) => b.confidence - a.confidence);
+    const final = [];
+    for (let d of detections) {
+        let keep = true;
+        for (let f of final) {
+            if (iou(d.bbox, f.bbox) > IOU_THRESH) { keep = false; break; }
+        }
+        if (keep) final.push(d);
+    }
+    log(`✅ После NMS: ${final.length}`);
+    return final;
+}
 
     function drawResults(detections, imgWidth, imgHeight) {
         canvas.width = imgWidth;
