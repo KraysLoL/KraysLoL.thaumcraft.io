@@ -994,7 +994,7 @@ recogLog(
 let txt=
 await(
 await fetch(
-"/models/models/field_class_names.txt"
+"./models/models/field_class_names.txt"
 )
 ).text();
 
@@ -1019,7 +1019,7 @@ ortSession=
 await ort
 .InferenceSession
 .create(
-"/models/models/field_object_detection.onnx"
+"./models/models/field_object_detection.onnx"
 );
 
 recogLog(
