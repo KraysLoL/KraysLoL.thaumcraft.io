@@ -1247,90 +1247,154 @@ async function recognizeAspects(img) {
 function buildResearchFromDetections(items, imgWidth, imgHeight) {
   if (!items.length) return;
 
-  const freeCells = items.filter((x) => x.cls === "free_hex").length;
-
-  let radius = 4;
-
-  generateGrid(radius);
+  generateGrid(4);
 
   for (const cell of gridState.values()) {
-    cell.active = false;
-    cell.aspect = null;
-    cell.generated = false;
+    cell.active=false;
+    cell.aspect=null;
+    cell.generated=false;
   }
 
-  const activeCells = [];
-  const aspectCells = [];
+  const activeCells=[];
+  const aspectCells=[];
 
-  const imgCenterX = imgWidth / 2;
-  const imgCenterY = imgHeight / 2;
+  const imgCenterX=imgWidth/2;
+  const imgCenterY=imgHeight/2;
 
-  // реальный размер шага между центрами
-  const STEP_X = 41;
-  const STEP_Y = 23.5;
+  // только пустые клетки — они образуют сетку
+  const free=items
+      .filter(x=>x.cls==="free_hex")
+      .map(x=>({
+          x:x.x-imgCenterX,
+          y:x.y-imgCenterY
+      }));
 
-  console.log("====== DETECTIONS ======");
 
-  for (const item of items) {
-    const relX = item.x - imgCenterX;
-    const relY = item.y - imgCenterY;
+  // ---- автоопределение шага X ----
 
-    // реальные шаги из логов
-    const STEP_X = 54;
-    const STEP_Y = 31;
+  const xs=[
+      ...new Set(
+          free
+          .map(v=>Math.round(v.x))
+      )
+  ].sort((a,b)=>a-b);
 
-    // колонка
-    const col = Math.round(relX / STEP_X);
+  const xDiff=[];
 
-    // строка
-    const row = Math.round(relY / STEP_Y);
+  for(let i=1;i<xs.length;i++){
 
-    // axial
-    const hx = col;
-    const hy = row - Math.floor((col + (col & 1)) / 2);
+      const d=xs[i]-xs[i-1];
 
-    const key = `${hx},${hy}`;
-
-    console.log({
-      cls: item.cls,
-      relX,
-      relY,
-      col,
-      row,
-      hx,
-      hy,
-      key,
-      exists: gridState.has(key),
-    });
-
-    if (!gridState.has(key)) continue;
-
-    const cell = gridState.get(key);
-
-    cell.active = true;
-
-    if (!activeCells.includes(key)) activeCells.push(key);
-
-    if (item.cls === "free_hex") continue;
-
-    if (cell.aspect) {
-      console.log("КОНФЛИКТ", key);
-      continue;
-    }
-
-    cell.aspect = item.cls;
-
-    aspectCells.push(`${key}:${item.cls}`);
+      if(d>10)
+          xDiff.push(d);
   }
 
-  const state = {
-    version: "full_aspects_4.3",
-    radius,
-    activeCells,
-    aspectCells,
+  const STEP_X=
+      xDiff.reduce(
+          (a,b)=>a+b,0
+      )/xDiff.length;
+
+
+
+  // ---- автоопределение шага Y ----
+
+  const ys=[
+      ...new Set(
+          free
+          .map(v=>Math.round(v.y))
+      )
+  ].sort((a,b)=>a-b);
+
+  const yDiff=[];
+
+  for(let i=1;i<ys.length;i++){
+
+      const d=ys[i]-ys[i-1];
+
+      if(d>10)
+          yDiff.push(d);
+  }
+
+  const STEP_Y=
+      yDiff.reduce(
+          (a,b)=>a+b,0
+      )/yDiff.length;
+
+  console.log(
+      "STEP_X",
+      STEP_X,
+      "STEP_Y",
+      STEP_Y
+  );
+
+
+  for(const item of items){
+
+      const relX=
+          item.x-imgCenterX;
+
+      const relY=
+          item.y-imgCenterY;
+
+      const hx=
+          Math.round(
+              relX/STEP_X
+          );
+
+      const hy=
+          Math.round(
+              relY/STEP_Y
+          );
+
+      const key=
+          `${hx},${hy}`;
+
+      console.log({
+          cls:item.cls,
+          relX,
+          relY,
+          hx,
+          hy,
+          key,
+          exists:gridState.has(key)
+      });
+
+      if(!gridState.has(key))
+          continue;
+
+      const cell=
+          gridState.get(key);
+
+      cell.active=true;
+
+      if(!activeCells.includes(key))
+          activeCells.push(key);
+
+      if(item.cls==="free_hex")
+          continue;
+
+      cell.aspect=item.cls;
+
+      aspectCells.push(
+          `${key}:${item.cls}`
+      );
+  }
+
+  const state={
+      version:"full_aspects_4.3",
+      radius:4,
+      activeCells,
+      aspectCells
   };
 
-  document.getElementById("importText").value = JSON.stringify(state, null, 2);
+  document.getElementById(
+      "importText"
+  ).value=
+      JSON.stringify(
+          state,
+          null,
+          2
+      );
 
   redraw();
 
@@ -1338,7 +1402,10 @@ function buildResearchFromDetections(items, imgWidth, imgHeight) {
 
   console.log(state);
 
-  log("📥 исследование распознано", "success");
+  log(
+      "📥 исследование распознано",
+      "success"
+  );
 }
 
 document.getElementById("uploadAspects").onchange = (e) => {
