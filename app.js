@@ -1250,151 +1250,106 @@ function buildResearchFromDetections(items, imgWidth, imgHeight) {
   generateGrid(4);
 
   for (const cell of gridState.values()) {
-    cell.active=false;
-    cell.aspect=null;
-    cell.generated=false;
+    cell.active = false;
+    cell.aspect = null;
+    cell.generated = false;
   }
 
-  const activeCells=[];
-  const aspectCells=[];
+  const activeCells = [];
+  const aspectCells = [];
 
-  const imgCenterX=imgWidth/2;
-  const imgCenterY=imgHeight/2;
+  const imgCenterX = imgWidth / 2;
+  const imgCenterY = imgHeight / 2;
 
   // только пустые клетки — они образуют сетку
-  const free=items
-      .filter(x=>x.cls==="free_hex")
-      .map(x=>({
-          x:x.x-imgCenterX,
-          y:x.y-imgCenterY
-      }));
-
+  const free = items
+    .filter((x) => x.cls === "free_hex")
+    .map((x) => ({
+      x: x.x - imgCenterX,
+      y: x.y - imgCenterY,
+    }));
 
   // ---- автоопределение шага X ----
 
-  const xs=[
-      ...new Set(
-          free
-          .map(v=>Math.round(v.x))
-      )
-  ].sort((a,b)=>a-b);
+  const xs = [...new Set(free.map((v) => Math.round(v.x)))].sort(
+    (a, b) => a - b,
+  );
 
-  const xDiff=[];
+  const xDiff = [];
 
-  for(let i=1;i<xs.length;i++){
+  for (let i = 1; i < xs.length; i++) {
+    const d = xs[i] - xs[i - 1];
 
-      const d=xs[i]-xs[i-1];
-
-      if(d>10)
-          xDiff.push(d);
+    if (d > 10) xDiff.push(d);
   }
 
-  const STEP_X=
-      xDiff.reduce(
-          (a,b)=>a+b,0
-      )/xDiff.length;
-
-
+  const STEP_X = xDiff.reduce((a, b) => a + b, 0) / xDiff.length;
 
   // ---- автоопределение шага Y ----
 
-  const ys=[
-      ...new Set(
-          free
-          .map(v=>Math.round(v.y))
-      )
-  ].sort((a,b)=>a-b);
-
-  const yDiff=[];
-
-  for(let i=1;i<ys.length;i++){
-
-      const d=ys[i]-ys[i-1];
-
-      if(d>10)
-          yDiff.push(d);
-  }
-
-  const STEP_Y=
-      yDiff.reduce(
-          (a,b)=>a+b,0
-      )/yDiff.length;
-
-  console.log(
-      "STEP_X",
-      STEP_X,
-      "STEP_Y",
-      STEP_Y
+  const ys = [...new Set(free.map((v) => Math.round(v.y)))].sort(
+    (a, b) => a - b,
   );
 
+  const yDiff = [];
 
-  for(const item of items){
+  for (let i = 1; i < ys.length; i++) {
+    const d = ys[i] - ys[i - 1];
 
-      const relX=
-          item.x-imgCenterX;
-
-      const relY=
-          item.y-imgCenterY;
-
-      const hx=
-          Math.round(
-              relX/STEP_X
-          );
-
-      const hy=
-          Math.round(
-              relY/STEP_Y
-          );
-
-      const key=
-          `${hx},${hy}`;
-
-      console.log({
-          cls:item.cls,
-          relX,
-          relY,
-          hx,
-          hy,
-          key,
-          exists:gridState.has(key)
-      });
-
-      if(!gridState.has(key))
-          continue;
-
-      const cell=
-          gridState.get(key);
-
-      cell.active=true;
-
-      if(!activeCells.includes(key))
-          activeCells.push(key);
-
-      if(item.cls==="free_hex")
-          continue;
-
-      cell.aspect=item.cls;
-
-      aspectCells.push(
-          `${key}:${item.cls}`
-      );
+    if (d > 10) yDiff.push(d);
   }
 
-  const state={
-      version:"full_aspects_4.3",
-      radius:4,
-      activeCells,
-      aspectCells
+  const STEP_Y = yDiff.reduce((a, b) => a + b, 0) / yDiff.length;
+
+  console.log("STEP_X", STEP_X, "STEP_Y", STEP_Y);
+
+  for (const item of items) {
+    const relX = item.x - imgCenterX;
+
+    const relY = item.y - imgCenterY;
+
+    const hx = Math.round(relX / STEP_X);
+
+    const row = Math.round(relY / STEP_Y);
+
+    // сдвиг колонок
+    const hy = row - Math.floor((hx + 2) / 2);
+
+    const key = `${hx},${hy}`;
+
+    console.log({
+      cls: item.cls,
+      relX,
+      relY,
+      hx,
+      row,
+      hy,
+      key,
+    });
+
+    if (!gridState.has(key)) continue;
+
+    const cell = gridState.get(key);
+
+    cell.active = true;
+
+    if (!activeCells.includes(key)) activeCells.push(key);
+
+    if (item.cls === "free_hex") continue;
+
+    cell.aspect = item.cls;
+
+    aspectCells.push(`${key}:${item.cls}`);
+  }
+
+  const state = {
+    version: "full_aspects_4.3",
+    radius: 4,
+    activeCells,
+    aspectCells,
   };
 
-  document.getElementById(
-      "importText"
-  ).value=
-      JSON.stringify(
-          state,
-          null,
-          2
-      );
+  document.getElementById("importText").value = JSON.stringify(state, null, 2);
 
   redraw();
 
@@ -1402,10 +1357,7 @@ function buildResearchFromDetections(items, imgWidth, imgHeight) {
 
   console.log(state);
 
-  log(
-      "📥 исследование распознано",
-      "success"
-  );
+  log("📥 исследование распознано", "success");
 }
 
 document.getElementById("uploadAspects").onchange = (e) => {
