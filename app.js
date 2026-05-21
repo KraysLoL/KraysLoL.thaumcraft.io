@@ -1267,7 +1267,7 @@ function buildResearchFromDetections(items, imgWidth, imgHeight) {
 
   // реальный размер шага между центрами
   const STEP_X = 41;
-  const STEP_Y = 47;
+  const STEP_Y = 23.5;
 
   console.log("====== DETECTIONS ======");
 
