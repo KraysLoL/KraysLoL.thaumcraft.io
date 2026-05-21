@@ -2,12 +2,12 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Диагностика модели детекции</title>
+    <title>Распознавание аспектов (настраиваемое масштабирование)</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/ort.min.js"></script>
     <style>
         body { font-family: monospace; background: #0a0f1e; color: #ddd; padding: 20px; max-width: 1400px; margin: 0 auto; }
         canvas { border: 1px solid #3e5a6c; max-width: 100%; background: #1e2a36; }
-        .controls { display: flex; flex-wrap: wrap; gap: 12px; margin: 15px 0; align-items: center; background: #11161f; padding: 12px; border-radius: 8px; }
+        .controls { display: flex; flex-wrap: wrap; gap: 12px; margin: 15px 0; background: #11161f; padding: 12px; border-radius: 8px; align-items: center; }
         .param-group { background: #1a2230; padding: 8px 12px; border-radius: 6px; }
         button, input[type="file"] { background: #2c4c6c; color: white; border: none; padding: 6px 12px; cursor: pointer; border-radius: 4px; }
         .slider { min-width: 180px; }
@@ -17,34 +17,39 @@
     </style>
 </head>
 <body>
-<h2>🔍 Диагностика модели распознавания</h2>
+<h2>🔍 Распознавание аспектов (финальная настраиваемая версия)</h2>
 <div class="controls">
     <input type="file" id="upload" accept="image/*">
     <div class="param-group">
-        <label>Порог:</label>
-        <input type="range" id="conf" min="0" max="1" step="0.01" value="0.1" style="width:100px">
-        <span id="confVal">0.10</span>
+        <label>Порог уверенности:</label>
+        <input type="range" id="conf" min="0" max="1" step="0.01" value="0.3" style="width:100px">
+        <span id="confVal">0.30</span>
     </div>
     <div class="param-group">
         <label>BGR:</label>
         <input type="checkbox" id="bgrCheck" checked>
     </div>
     <div class="param-group">
-        <label>Нормализация:</label>
+        <label>Нормализация входа:</label>
         <select id="normSelect">
+            <option value="0_255">[0, 255] (без норм.)</option>
             <option value="0_1">[0, 1] (÷255)</option>
             <option value="neg1_1">[-1, 1] (÷127.5 -1)</option>
-            <option value="0_255">[0, 255] (без норм.)</option>
         </select>
     </div>
     <div class="param-group">
-        <label>Сигмоида на выходе:</label>
-        <input type="checkbox" id="sigmoidOutput">
-        <span style="font-size:10px">(для obj и class)</span>
+        <label>Масштаб объектности:</label>
+        <input type="number" id="objScale" value="1" step="10" style="width:70px">
+        <span style="font-size:10px">(делить на)</span>
+    </div>
+    <div class="param-group">
+        <label>Масштаб классов:</label>
+        <input type="number" id="clsScale" value="1" step="10" style="width:70px">
+        <span style="font-size:10px">(делить на)</span>
     </div>
     <div class="param-group">
         <label>Индекс объектности:</label>
-        <input type="number" id="objIdx" value="4" min="0" max="10" step="1" style="width:50px">
+        <input type="number" id="objIdx" value="4" min="0" max="10" step="1" style="width:60px">
     </div>
     <button id="clearLog">Очистить лог</button>
 </div>
@@ -57,11 +62,11 @@
     let originalImg = null;
     let canvas = document.getElementById('canvas');
     let ctx = canvas.getContext('2d');
-    let confThreshold = 0.1;
+    let confThreshold = 0.3;
     const IOU_THRESH = 0.45;
     const INPUT_SIZE = 640;
     
-    // Стандартные якоря YOLOv5
+    // Стандартные якоря YOLOv5 (возможно, не используются, но оставим)
     const ANCHORS = [
         [10,13], [16,30], [33,23],
         [30,61], [62,45], [59,119],
@@ -92,7 +97,7 @@
             let text = await resp.text();
             let rawNames = text.split(/\r?\n/).filter(l => l.trim().length > 0);
             classNames = rawNames;
-            log(`📄 Загружено имён: ${classNames.length}`);
+            log(`📄 Загружено имён классов: ${classNames.length}`);
             log(`⏳ Загрузка модели...`);
             session = await ort.InferenceSession.create('models/field_object_detection.onnx');
             log(`✅ Модель загружена. Вход: ${session.inputNames}, выход: ${session.outputNames}`);
@@ -159,10 +164,11 @@
         
         const useBGR = document.getElementById('bgrCheck').checked;
         const normType = document.getElementById('normSelect').value;
-        const useSigmoid = document.getElementById('sigmoidOutput').checked;
         const objChannel = parseInt(document.getElementById('objIdx').value);
+        const objScale = parseFloat(document.getElementById('objScale').value);
+        const clsScale = parseFloat(document.getElementById('clsScale').value);
         
-        log(`⚙️ Параметры: BGR=${useBGR}, норм=${normType}, сигмоида на выходе=${useSigmoid}, канал объектности=${objChannel}`);
+        log(`⚙️ Параметры: BGR=${useBGR}, норм=${normType}, objScale=${objScale}, clsScale=${clsScale}, objChannel=${objChannel}, порог=${confThreshold}`);
         log(`⏳ Обработка ${img.width}x${img.height}...`);
         
         try {
@@ -173,21 +179,7 @@
             const data = outTensor.data;
             const dims = outTensor.dims;
             
-            // ДИАГНОСТИКА ВЫХОДНОГО ТЕНЗОРА
-            let minVal = Infinity, maxVal = -Infinity, sumVal = 0;
-            for (let i = 0; i < Math.min(data.length, 10000); i++) {
-                const v = data[i];
-                if (v < minVal) minVal = v;
-                if (v > maxVal) maxVal = v;
-                sumVal += v;
-            }
-            log(`📊 Выход тензора: мин=${minVal.toFixed(6)}, макс=${maxVal.toFixed(6)}, сред(10k)=${(sumVal/10000).toFixed(6)}`);
-            // Первые 30 значений
-            let firstVals = [];
-            for (let i = 0; i < Math.min(30, data.length); i++) firstVals.push(data[i].toFixed(4));
-            log(`🔢 Первые 30 значений: ${firstVals.join(', ')}`);
-            
-            // Определяем формат: [1, 85, 8400] или [1, 8400, 85]
+            // Определяем формат [1,85,8400] или [1,8400,85]
             let numPred, numChannels, isTransposed;
             if (dims[1] === 85 && dims[2] > 1000) {
                 numChannels = 85;
@@ -201,16 +193,12 @@
                 log(`⚠️ Неизвестная размерность: ${dims}`, true);
                 return;
             }
-            const numClasses = numChannels - 5; // 80
-            log(`📐 Формат: ${numPred} предсказаний, ${numClasses} классов`);
-            
-            // Обрезаем classNames до нужного количества
+            const numClasses = numChannels - 5;
             if (classNames.length !== numClasses) {
                 log(`⚠️ Имён классов ${classNames.length}, модель ожидает ${numClasses}. Обрезаю.`, true);
                 classNames = classNames.slice(0, numClasses);
             }
             
-            // Декодирование YOLO с сеткой и якорями
             const gridSizes = [80, 40, 20];
             const anchorsPerScale = [ANCHORS.slice(0,3), ANCHORS.slice(3,6), ANCHORS.slice(6,9)];
             let detections = [];
@@ -225,17 +213,17 @@
                     const row = Math.floor(cell / gridSize);
                     const col = cell % gridSize;
                     for (let a = 0; a < 3; a++) {
-                        let tx, ty, tw, th, objLogit;
-                        let classLogits = new Array(numClasses);
+                        let tx, ty, tw, th, objRaw;
+                        let classRaws = new Array(numClasses);
                         if (!isTransposed) {
                             const idx = offset + cell;
                             tx = data[predOffset + idx];
                             ty = data[numPred + predOffset + idx];
                             tw = data[2*numPred + predOffset + idx];
                             th = data[3*numPred + predOffset + idx];
-                            objLogit = data[objChannel * numPred + predOffset + idx];
+                            objRaw = data[objChannel * numPred + predOffset + idx];
                             for (let c = 0; c < numClasses; c++) {
-                                classLogits[c] = data[(5+c)*numPred + predOffset + idx];
+                                classRaws[c] = data[(5+c)*numPred + predOffset + idx];
                             }
                         } else {
                             const idx = offset + cell;
@@ -244,24 +232,28 @@
                             ty = data[base+1];
                             tw = data[base+2];
                             th = data[base+3];
-                            objLogit = data[base + objChannel];
+                            objRaw = data[base + objChannel];
                             for (let c = 0; c < numClasses; c++) {
-                                classLogits[c] = data[base + 5 + c];
+                                classRaws[c] = data[base + 5 + c];
                             }
                         }
                         
-                        // Применяем сигмоиду если надо
-                        const objProb = useSigmoid ? 1/(1+Math.exp(-objLogit)) : objLogit;
+                        // Масштабируем и применяем сигмоиду, чтобы получить вероятность в [0,1]
+                        let objProb = objRaw / objScale;
+                        objProb = Math.min(1, Math.max(0, objProb)); // ограничиваем
                         if (objProb < confThreshold) continue;
                         
-                        const cx = (useSigmoid ? 1/(1+Math.exp(-tx)) : tx) + col;
-                        const cy = (useSigmoid ? 1/(1+Math.exp(-ty)) : ty) + row;
-                        const w = anchors[a][0] * Math.exp(tw);
-                        const h = anchors[a][1] * Math.exp(th);
+                        // Декодирование координат (стандартное YOLO)
+                        const cx = (1 / (1 + Math.exp(-tx)) + col) / gridSize;
+                        const cy = (1 / (1 + Math.exp(-ty)) + row) / gridSize;
+                        const w = anchors[a][0] * Math.exp(tw) / INPUT_SIZE;
+                        const h = anchors[a][1] * Math.exp(th) / INPUT_SIZE;
                         
+                        // Находим лучший класс с масштабированием
                         let bestClass = -1, bestProb = 0;
                         for (let c = 0; c < numClasses; c++) {
-                            let prob = useSigmoid ? 1/(1+Math.exp(-classLogits[c])) : classLogits[c];
+                            let prob = classRaws[c] / clsScale;
+                            prob = Math.min(1, Math.max(0, prob));
                             if (prob > bestProb) {
                                 bestProb = prob;
                                 bestClass = c;
@@ -271,7 +263,7 @@
                         if (confidence < confThreshold) continue;
                         
                         detections.push({
-                            bbox: [cx / gridSize, cy / gridSize, w / INPUT_SIZE, h / INPUT_SIZE],
+                            bbox: [cx, cy, w, h],
                             confidence: confidence,
                             classId: bestClass
                         });
@@ -323,6 +315,10 @@
                 const classesFound = new Set();
                 final.forEach(d => classesFound.add(classNames[d.classId]));
                 log(`   Классы: ${Array.from(classesFound).join(', ')}`);
+                // Покажем первые 5 с уверенностью
+                final.slice(0,5).forEach(d => {
+                    log(`   - ${classNames[d.classId]} (${(d.confidence*100).toFixed(1)}%)`);
+                });
             }
         } catch(e) {
             log(`❌ Ошибка: ${e.message}`, true);
