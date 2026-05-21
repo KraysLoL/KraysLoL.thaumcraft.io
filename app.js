@@ -1244,22 +1244,22 @@ async function recognizeAspects(img) {
   }
 }
 
-function buildResearchFromDetections(
-    items,
-    imgWidth,
-    imgHeight
-) {
+function buildResearchFromDetections(items, imgWidth, imgHeight) {
   if (!items.length) return;
+
   const freeCells = items.filter((x) => x.cls === "free_hex").length;
+
   let radius = 2;
 
   if (freeCells > 19) radius = 3;
-
   if (freeCells > 37) radius = 4;
-  // поле исследования радиуса 2
+
+  // временно принудительно
+  radius = 4;
+
   generateGrid(radius);
 
-  // очищаем
+  // очистка поля
   for (const cell of gridState.values()) {
     cell.active = false;
     cell.aspect = null;
@@ -1269,39 +1269,53 @@ function buildResearchFromDetections(
   const activeCells = [];
   const aspectCells = [];
 
-  // сначала активируем все найденные free_hex
+  const imgCenterX = imgWidth / 2;
+  const imgCenterY = imgHeight / 2;
+
+  console.log("====== DETECTIONS ======");
+
   for (const item of items) {
-    const imgCenterX = imgWidth / 2;
-const imgCenterY = imgHeight / 2;
+    // координаты относительно центра картинки
+    const relX = item.x - imgCenterX;
+    const relY = item.y - imgCenterY;
 
-const relX = item.x - imgCenterX;
-const relY = item.y - imgCenterY;
+    // подобрать масштаб
+    const SCALE = 55;
 
-// масштаб изображения -> координаты игрового поля
-const fieldScale = HEX_SIZE * 1.7;
+    const px = OFFSET_X + relX / SCALE;
 
-const worldX = relX / fieldScale + OFFSET_X;
-const worldY = relY / fieldScale + OFFSET_Y;
+    const py = OFFSET_Y + relY / SCALE;
 
-const hex = pixelToHex(worldX, worldY);
+    const hex = pixelToHex(px, py);
 
     const key = `${hex.x},${hex.y}`;
+
+    console.log({
+      cls: item.cls,
+      x: item.x,
+      y: item.y,
+      relX,
+      relY,
+      key,
+      exists: gridState.has(key),
+    });
 
     if (!gridState.has(key)) continue;
 
     const cell = gridState.get(key);
 
-    // активируем клетку
     cell.active = true;
 
-    if (!activeCells.includes(key)) {
-      activeCells.push(key);
-    }
+    if (!activeCells.includes(key)) activeCells.push(key);
 
-    // free_hex — только клетка
     if (item.cls === "free_hex") continue;
 
-    // аспект
+    // защита от наложения
+    if (cell.aspect) {
+      console.log("КОНФЛИКТ", key, cell.aspect, item.cls);
+      continue;
+    }
+
     cell.aspect = item.cls;
 
     aspectCells.push(`${key}:${item.cls}`);
@@ -1309,11 +1323,8 @@ const hex = pixelToHex(worldX, worldY);
 
   const state = {
     version: "full_aspects_4.3",
-
-    radius: radius,
-
+    radius,
     activeCells,
-
     aspectCells,
   };
 
@@ -1323,9 +1334,9 @@ const hex = pixelToHex(worldX, worldY);
 
   scheduleTableRefresh();
 
-  log("📥 исследование распознано", "success");
-
   console.log(state);
+
+  log("📥 исследование распознано", "success");
 }
 
 document.getElementById("uploadAspects").onchange = (e) => {
