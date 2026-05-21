@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Распознавание аспектов Thaumcraft | ONNX Runtime Web</title>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/ort.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0a0f1e;
+            color: #ddd;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #bbd9ff;
+        }
+        .upload-area {
+            margin: 20px 0;
+        }
+        canvas {
+            border: 2px solid #3e5a6c;
+            border-radius: 8px;
+            background: #000;
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 10px 0;
+        }
+        .results {
+            background: rgba(16, 24, 32, 0.9);
+            border-radius: 12px;
+            padding: 12px;
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .detection {
+            font-size: 12px;
+            margin: 4px 0;
+            font-family: monospace;
+        }
+        button {
+            background: #2c4c6c;
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-right: 10px;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #3e6a90;
+        }
+        .status {
+            color: #88ff88;
+        }
+        .error {
+            color: #ff8888;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🔍 Автоматическое распознавание аспектов (ONNX)</h1>
+    <p>Загрузите скриншот стола исследований из Thaumcraft. Модель определит все аспекты и их позиции.</p>
+
+    <div class="upload-area">
+        <input type="file" id="imageUpload" accept="image/*">
+        <button id="transferBtn" style="display:none;">📥 Перенести на сетку</button>
+    </div>
+
+    <canvas id="previewCanvas"></canvas>
+
+    <div id="info" class="status">⏳ Загрузка модели...</div>
+    <div id="results" class="results"></div>
+</div>
+
+<script>
+    // Глобальные переменные
+    let session = null;
+    let classNames = [];
+    let lastDetections = [];  // храним последние детекции для переноса
+    let originalImage = null; // исходное изображение (HTMLImageElement)
+    let previewCanvas = document.getElementById('previewCanvas');
+    let ctx = previewCanvas.getContext('2d');
+
+    // Конфигурация модели
+    const MODEL_PATH = 'models/field_object_detection.onnx';
+    const CLASS_NAMES_PATH = 'models/field_class_names.txt';
+    const INPUT_SIZE = 640;
+    const CONF_THRESHOLD = 0.4;   // порог уверенности
+    const IOU_THRESHOLD = 0.45;   // для NMS
+
+    // Загрузка модели и классов
+    async function init() {
+        try {
+            // 1. Загружаем список классов
+            const resp = await fetch(CLASS_NAMES_PATH);
+            if (!resp.ok) throw new Error(`Не удалось загрузить ${CLASS_NAMES_PATH}`);
+            const text = await resp.text();
+            classNames = text.split(/\r?\n/).filter(line => line.trim().length > 0);
+            document.getElementById('info').innerHTML = `✅ Загружено классов: ${classNames.length}`;
+
+            // 2. Загружаем ONNX модель
+            session = await ort.InferenceSession.create(MODEL_PATH);
+            document.getElementById('info').innerHTML += `<br>✅ Модель загружена. Готов к распознаванию.`;
+            document.getElementById('transferBtn').style.display = 'inline-block';
+        } catch (err) {
+            console.error(err);
+            document.getElementById('info').innerHTML = `<span class="error">❌ Ошибка: ${err.message}</span>`;
+        }
+    }
+
+    // Препроцессинг: квадратирование с чёрными полями, ресайз до 640x640, нормализация, перевод в NCHW
+    async function preprocessImage(imgElement) {
+        const canvas = document.createElement('canvas');
+        canvas.width = INPUT_SIZE;
+        canvas.height = INPUT_SIZE;
+        const ctxPrep = canvas.getContext('2d');
+
+        // Заливаем чёрным
+        ctxPrep.fillStyle = '#000000';
+        ctxPrep.fillRect(0, 0, INPUT_SIZE, INPUT_SIZE);
+
+        // Вычисляем масштаб для вписывания
+        const scale = Math.min(INPUT_SIZE / imgElement.width, INPUT_SIZE / imgElement.height);
+        const newWidth = imgElement.width * scale;
+        const newHeight = imgElement.height * scale;
+        const dx = (INPUT_SIZE - newWidth) / 2;
+        const dy = (INPUT_SIZE - newHeight) / 2;
+
+        ctxPrep.drawImage(imgElement, dx, dy, newWidth, newHeight);
+        const imageData = ctxPrep.getImageData(0, 0, INPUT_SIZE, INPUT_SIZE);
+        const data = new Float32Array(INPUT_SIZE * INPUT_SIZE * 3);
+        for (let i = 0; i < INPUT_SIZE * INPUT_SIZE; i++) {
+            data[i*3] = imageData.data[i*4] / 255.0;
+            data[i*3+1] = imageData.data[i*4+1] / 255.0;
+            data[i*3+2] = imageData.data[i*4+2] / 255.0;
+        }
+        // Формат NCHW
+        const tensor = new ort.Tensor('float32', data, [1, 3, INPUT_SIZE, INPUT_SIZE]);
+        return tensor;
+    }
+
+    // Вычисление IoU для двух боксов (формат [cx, cy, w, h])
+    function computeIOU(box1, box2) {
+        const x1 = box1[0] - box1[2]/2;
+        const y1 = box1[1] - box1[3]/2;
+        const x2 = box1[0] + box1[2]/2;
+        const y2 = box1[1] + box1[3]/2;
+        const x1b = box2[0] - box2[2]/2;
+        const y1b = box2[1] - box2[3]/2;
+        const x2b = box2[0] + box2[2]/2;
+        const y2b = box2[1] + box2[3]/2;
+
+        const interX1 = Math.max(x1, x1b);
+        const interY1 = Math.max(y1, y1b);
+        const interX2 = Math.min(x2, x2b);
+        const interY2 = Math.min(y2, y2b);
+        const interArea = Math.max(0, interX2 - interX1) * Math.max(0, interY2 - interY1);
+        const area1 = (x2 - x1) * (y2 - y1);
+        const area2 = (x2b - x1b) * (y2b - y1b);
+        return interArea / (area1 + area2 - interArea);
+    }
+
+    // Постобработка YOLO: из тензора [1, 85, 8400] -> массив детекций
+    function postprocess(outputTensor) {
+        const dims = outputTensor.dims; // [1, 85, 8400]
+        const numPredictions = dims[2]; // 8400
+        const numClasses = dims[1] - 5; // 85 - 5 = 80
+
+        if (classNames.length !== numClasses) {
+            console.warn(`Внимание: количество имён классов (${classNames.length}) не совпадает с числом классов в модели (${numClasses})`);
+        }
+
+        const data = outputTensor.data;
+        const detections = [];
+
+        for (let i = 0; i < numPredictions; i++) {
+            const cx = data[i];                       // 0-й канал
+            const cy = data[numPredictions + i];      // 1-й
+            const w  = data[2*numPredictions + i];    // 2-й
+            const h  = data[3*numPredictions + i];    // 3-й
+            const objConf = data[4*numPredictions + i]; // 4-й
+
+            if (objConf < CONF_THRESHOLD) continue;
+
+            let maxClassConf = 0;
+            let maxClassId = -1;
+            for (let c = 0; c < numClasses; c++) {
+                const classConf = data[(5 + c) * numPredictions + i];
+                if (classConf > maxClassConf) {
+                    maxClassConf = classConf;
+                    maxClassId = c;
+                }
+            }
+            const confidence = objConf * maxClassConf;
+            if (confidence < CONF_THRESHOLD) continue;
+
+            detections.push({
+                bbox: [cx, cy, w, h],
+                confidence: confidence,
+                classId: maxClassId
+            });
+        }
+
+        // Non-Maximum Suppression (жадный)
+        detections.sort((a,b) => b.confidence - a.confidence);
+        const final = [];
+        for (let i = 0; i < detections.length; i++) {
+            let keep = true;
+            for (let j = 0; j < final.length; j++) {
+                if (computeIOU(detections[i].bbox, final[j].bbox) > IOU_THRESHOLD) {
+                    keep = false;
+                    break;
+                }
+            }
+            if (keep) final.push(detections[i]);
+        }
+        return final;
+    }
+
+    // Масштабирование координат детекции из пространства [0,1] (модель) в пиксели исходного изображения
+    function scaleDetectionsToOriginal(detections, origWidth, origHeight) {
+        return detections.map(det => {
+            // Координаты модели от 0 до 1, центр и размер
+            let cx = det.bbox[0] * origWidth;
+            let cy = det.bbox[1] * origHeight;
+            let w = det.bbox[2] * origWidth;
+            let h = det.bbox[3] * origHeight;
+            // Преобразуем в формат [x1, y1, x2, y2] для рисования
+            const x1 = cx - w/2;
+            const y1 = cy - h/2;
+            const x2 = cx + w/2;
+            const y2 = cy + h/2;
+            return {
+                ...det,
+                bboxAbs: [x1, y1, x2, y2],
+                center: [cx, cy]
+            };
+        });
+    }
+
+    // Отрисовка рамок и подписей на canvas
+    function drawDetections(detectionsScaled, imgWidth, imgHeight) {
+        previewCanvas.width = imgWidth;
+        previewCanvas.height = imgHeight;
+        // Рисуем исходное изображение
+        ctx.drawImage(originalImage, 0, 0, imgWidth, imgHeight);
+        for (const det of detectionsScaled) {
+            const [x1, y1, x2, y2] = det.bboxAbs;
+            // Рамка
+            ctx.strokeStyle = '#ffaa44';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+            // Подпись
+            const className = classNames[det.classId] || `аспект_${det.classId}`;
+            ctx.fillStyle = '#ffcc88';
+            ctx.font = 'bold 14px "Segoe UI"';
+            ctx.shadowBlur = 0;
+            ctx.fillText(`${className} (${Math.round(det.confidence*100)}%)`, x1, y1 - 4);
+        }
+    }
+
+    // Главная функция распознавания
+    async function init() {
+    try {
+        // Сначала проверим существование файлов через HEAD
+        const modelUrl = MODEL_PATH;
+        const classUrl = CLASS_NAMES_PATH;
+
+        const modelCheck = await fetch(modelUrl, { method: 'HEAD' });
+        if (!modelCheck.ok) throw new Error(`Модель не найдена (${modelCheck.status}): ${modelUrl}`);
+
+        const classCheck = await fetch(classUrl, { method: 'HEAD' });
+        if (!classCheck.ok) throw new Error(`Файл классов не найден (${classCheck.status}): ${classUrl}`);
+
+        // Загружаем классы
+        const resp = await fetch(classUrl);
+        const text = await resp.text();
+        classNames = text.split(/\r?\n/).filter(line => line.trim().length > 0);
+        document.getElementById('info').innerHTML = `✅ Загружено классов: ${classNames.length}`;
+
+        // Загружаем модель (может занять время)
+        document.getElementById('info').innerHTML += `<br>⏳ Загрузка модели (${Math.round((await fetch(modelUrl)).headers.get('content-length')/1024/1024)} МБ)...`;
+        session = await ort.InferenceSession.create(modelUrl);
+        document.getElementById('info').innerHTML += `<br>✅ Модель загружена. Готов к распознаванию.`;
+        document.getElementById('transferBtn').style.display = 'inline-block';
+    } catch (err) {
+        console.error(err);
+        document.getElementById('info').innerHTML = `<span class="error">❌ Ошибка: ${err.message}</span>`;
+    }
+}
+
+    // Обработка загрузки файла
+    document.getElementById('imageUpload').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const img = new Image();
+        img.onload = () => {
+            originalImage = img;
+            recognizeImage(img);
+        };
+        img.src = URL.createObjectURL(file);
+    });
+
+    // Перенос на сетку (вызов родительского окна)
+    document.getElementById('transferBtn').addEventListener('click', () => {
+        if (lastDetections.length === 0) {
+            alert("Нет распознанных аспектов для переноса.");
+            return;
+        }
+        // Попытаемся передать данные в основное приложение (если открыто в одном окне - можно через localStorage или postMessage)
+        // Но проще предложить скопировать JSON и вставить в основной импорт.
+        const exportData = {
+            version: "full_aspects_4.3",
+            radius: currentRadius, // не доступно здесь, поэтому сохраним только аспекты без радиуса
+            activeCells: [],
+            aspectCells: lastDetections.map(det => {
+                // Пока что просто сохраняем название аспекта, координаты будут преобразованы позже
+                return { aspect: classNames[det.classId], x: det.center[0], y: det.center[1] };
+            })
+        };
+        // В реальной интеграции нужно вызвать функцию из основного приложения, но для теста - покажем JSON
+        const jsonStr = JSON.stringify(exportData, null, 2);
+        navigator.clipboard.writeText(jsonStr).then(() => {
+            alert("Данные распознавания скопированы в буфер обмена. Перейдите в основной инструмент и используйте 'Импорт состояния' (потребуется адаптация).");
+        }).catch(() => {
+            alert("Не удалось скопировать. Вот JSON:\n" + jsonStr);
+        });
+    });
+
+    // Запуск
+    init();
+</script>
+</body>
+</html>
