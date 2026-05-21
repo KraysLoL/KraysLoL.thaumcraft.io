@@ -325,7 +325,41 @@
       <textarea id="importText" rows="3" placeholder='{"version":"full_aspects_4.3","radius":4,"activeCells":["0,0"],"aspectCells":["0,0:ordo"]}'></textarea>
       <button id="importBtn">📂 Загрузить состояние</button>
     </div>
+    <hr>
 
+<label>🔍 Распознавание аспектов</label>
+
+<input
+type="file"
+id="uploadAspects"
+accept="image/*">
+
+<label>
+Порог:
+<input
+type="range"
+id="conf"
+min="0"
+max="1"
+step="0.01"
+value="0.25">
+<span id="confv">0.25</span>
+</label>
+
+<button id="clearRecognitionLog">
+🧹 Очистить лог распознавания
+</button>
+
+<canvas
+id="recognitionCanvas"
+style="
+margin-top:8px;
+width:100%;
+max-height:300px;
+border:1px solid #555;
+background:#111;
+">
+</canvas>
     <div class="stat">🎯 Активных клеток: <span id="activeCount">0</span></div>
     <div id="log">✨ Полная база аспектов (TC + аддоны). Соединение любого числа аспектов с оптимальными путями.</div>
   </div>
@@ -340,7 +374,7 @@
 
   <!-- Тултип -->
   <div id="aspect-tooltip"></div>
-
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/ort.min.js"></script>
   <script src="grid.js"></script>
   <script src="app.js"></script>
 <!-- Глобальный тултип для аспектов -->
