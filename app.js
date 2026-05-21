@@ -1311,10 +1311,7 @@ function buildResearchFromDetections(items, imgWidth, imgHeight) {
     const hx = Math.round(relX / STEP_X);
 const row = Math.round(relY / STEP_Y);
 
-// поправка только для нечётных колонок
-const oddOffset = Math.abs(hx % 2);
-
-const hy = row - Math.floor((hx + oddOffset) / 2);
+const hy = row - Math.floor((hx - (hx & 1)) / 2);
 
 const key = `${hx},${hy}`;
 
@@ -1322,7 +1319,6 @@ console.log({
   cls: item.cls,
   hx,
   row,
-  oddOffset,
   hy,
   key
 });
