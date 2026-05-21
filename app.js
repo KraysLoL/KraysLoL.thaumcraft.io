@@ -1308,24 +1308,42 @@ function buildResearchFromDetections(items, imgWidth, imgHeight) {
 
     const relY = item.y - imgCenterY;
 
-    const hx = Math.round(relX / STEP_X);
+    const hx =
+    Math.round(
+        relX / STEP_X
+    );
 
-    const row = Math.round(relY / STEP_Y);
+// row сейчас удвоен
+const row2 =
+    Math.round(
+        relY / STEP_Y
+    );
 
-    // сдвиг колонок
-    const hy = row - Math.floor((hx + 2) / 2);
+// приводим к реальному номеру ряда
+const row =
+    Math.round(
+        row2 / 2
+    );
+
+// axial
+const hy =
+    row -
+    Math.floor(
+        hx / 2
+    );
 
     const key = `${hx},${hy}`;
 
     console.log({
-      cls: item.cls,
-      relX,
-      relY,
-      hx,
-      row,
-      hy,
-      key,
-    });
+    cls:item.cls,
+    relX,
+    relY,
+    hx,
+    row2,
+    row,
+    hy,
+    key
+});
 
     if (!gridState.has(key)) continue;
 
