@@ -1244,99 +1244,127 @@ async function recognizeAspects(img) {
   }
 }
 
-function buildResearchFromDetections(items, imgWidth, imgHeight) {
-  if (!items.length) return;
+function buildResearchFromDetections(
+    items,
+    imgWidth,
+    imgHeight
+){
+    if(!items.length) return;
 
-  const freeCells = items.filter((x) => x.cls === "free_hex").length;
+    const freeCells=
+        items.filter(
+            x=>x.cls==="free_hex"
+        ).length;
 
-  let radius = 2;
+    let radius=4;
 
-  if (freeCells > 19) radius = 3;
-  if (freeCells > 37) radius = 4;
+    generateGrid(radius);
 
-  // временно принудительно
-  radius = 4;
-
-  generateGrid(radius);
-
-  // очистка поля
-  for (const cell of gridState.values()) {
-    cell.active = false;
-    cell.aspect = null;
-    cell.generated = false;
-  }
-
-  const activeCells = [];
-  const aspectCells = [];
-
-  const imgCenterX = imgWidth / 2;
-  const imgCenterY = imgHeight / 2;
-
-  console.log("====== DETECTIONS ======");
-
-  for (const item of items) {
-    // координаты относительно центра картинки
-    const relX = item.x - imgCenterX;
-    const relY = item.y - imgCenterY;
-
-    // подобрать масштаб
-    const SCALE = 55;
-
-    const px = OFFSET_X + relX / SCALE;
-
-    const py = OFFSET_Y + relY / SCALE;
-
-    const hex = pixelToHex(px, py);
-
-    const key = `${hex.x},${hex.y}`;
-
-    console.log({
-      cls: item.cls,
-      x: item.x,
-      y: item.y,
-      relX,
-      relY,
-      key,
-      exists: gridState.has(key),
-    });
-
-    if (!gridState.has(key)) continue;
-
-    const cell = gridState.get(key);
-
-    cell.active = true;
-
-    if (!activeCells.includes(key)) activeCells.push(key);
-
-    if (item.cls === "free_hex") continue;
-
-    // защита от наложения
-    if (cell.aspect) {
-      console.log("КОНФЛИКТ", key, cell.aspect, item.cls);
-      continue;
+    for(const cell of gridState.values()){
+        cell.active=false;
+        cell.aspect=null;
+        cell.generated=false;
     }
 
-    cell.aspect = item.cls;
+    const activeCells=[];
+    const aspectCells=[];
 
-    aspectCells.push(`${key}:${item.cls}`);
-  }
+    const imgCenterX=imgWidth/2;
+    const imgCenterY=imgHeight/2;
 
-  const state = {
-    version: "full_aspects_4.3",
-    radius,
-    activeCells,
-    aspectCells,
-  };
+    // реальный размер шага между центрами
+    const STEP_X=41;
+    const STEP_Y=47;
 
-  document.getElementById("importText").value = JSON.stringify(state, null, 2);
+    console.log("====== DETECTIONS ======");
 
-  redraw();
+    for(const item of items){
 
-  scheduleTableRefresh();
+        const relX=
+            item.x-imgCenterX;
 
-  console.log(state);
+        const relY=
+            item.y-imgCenterY;
 
-  log("📥 исследование распознано", "success");
+        // напрямую в координаты гекса
+        let hx=
+            Math.round(relX/STEP_X);
+
+        let hy=
+            Math.round(relY/STEP_Y);
+
+        // поправка для pointy-top
+        hy=Math.round(
+            hy-hx/2
+        );
+
+        const key=`${hx},${hy}`;
+
+        console.log({
+            cls:item.cls,
+            relX,
+            relY,
+            hx,
+            hy,
+            key,
+            exists:gridState.has(key)
+        });
+
+        if(!gridState.has(key))
+            continue;
+
+        const cell=
+            gridState.get(key);
+
+        cell.active=true;
+
+        if(!activeCells.includes(key))
+            activeCells.push(key);
+
+        if(item.cls==="free_hex")
+            continue;
+
+        if(cell.aspect){
+            console.log(
+                "КОНФЛИКТ",
+                key
+            );
+            continue;
+        }
+
+        cell.aspect=item.cls;
+
+        aspectCells.push(
+            `${key}:${item.cls}`
+        );
+    }
+
+    const state={
+        version:"full_aspects_4.3",
+        radius,
+        activeCells,
+        aspectCells
+    };
+
+    document.getElementById(
+        "importText"
+    ).value=
+        JSON.stringify(
+            state,
+            null,
+            2
+        );
+
+    redraw();
+
+    scheduleTableRefresh();
+
+    console.log(state);
+
+    log(
+        "📥 исследование распознано",
+        "success"
+    );
 }
 
 document.getElementById("uploadAspects").onchange = (e) => {
