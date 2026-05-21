@@ -1308,50 +1308,40 @@ function buildResearchFromDetections(items, imgWidth, imgHeight) {
 
     const relY = item.y - imgCenterY;
 
-    const hx =
-    Math.round(
-        relX / STEP_X
-    );
+    const hx = Math.round(relX / STEP_X);
 
-// row сейчас удвоен
-const row2 =
-    Math.round(
-        relY / STEP_Y
-    );
+    // row сейчас удвоен
+    const row2 = Math.round(relY / STEP_Y);
 
-// приводим к реальному номеру ряда
-const row =
-    Math.round(
-        row2 / 2
-    );
+    // приводим к реальному номеру ряда
+    const row = Math.round(row2 / 2);
 
-// axial
-const hy =
-    row -
-    Math.floor(
-        hx / 2
-    );
+    // axial
+    const hy = row - Math.floor(hx / 2);
 
     const key = `${hx},${hy}`;
 
     console.log({
-    cls:item.cls,
-    relX,
-    relY,
-    hx,
-    row2,
-    row,
-    hy,
-    key
-});
+      cls: item.cls,
+      relX,
+      relY,
+      hx,
+      row2,
+      row,
+      hy,
+      key,
+    });
 
-    if (!gridState.has(key)) continue;
-
+    // клетки вне реальной сетки отбрасываем
     const cell = gridState.get(key);
 
-    cell.active = true;
+    if (!cell) continue;
 
-    if (!activeCells.includes(key)) activeCells.push(key);
+    // защита от дублей/дрожания детектора
+    if (!cell.active) {
+      cell.active = true;
+      activeCells.push(key);
+    }
 
     if (item.cls === "free_hex") continue;
 
@@ -1359,7 +1349,14 @@ const hy =
 
     aspectCells.push(`${key}:${item.cls}`);
   }
+  activeCells.sort((a, b) => {
+    const [ax, ay] = a.split(",").map(Number);
+    const [bx, by] = b.split(",").map(Number);
 
+    if (ax !== bx) return ax - bx;
+
+    return ay - by;
+  });
   const state = {
     version: "full_aspects_4.3",
     radius: 4,
