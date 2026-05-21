@@ -1311,8 +1311,11 @@ function buildResearchFromDetections(items, imgWidth, imgHeight) {
     const hx = Math.round(relX / STEP_X);
 const row = Math.round(relY / STEP_Y);
 
-// смещение нечётных колонок
-const hy = row - ((Math.abs(hx) % 2) ? 1 : 0);
+let hy = row;
+
+if (Math.abs(hx) % 2 === 1 && row > 0) {
+  hy--;
+}
 
 const key = `${hx},${hy}`;
 
