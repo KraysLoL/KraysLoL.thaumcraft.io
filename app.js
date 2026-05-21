@@ -1313,8 +1313,10 @@ const row = Math.round(relY / STEP_Y);
 
 const q = hx;
 
-// поправка для odd-q
-const hy = row - Math.floor((q + 1) / 2);
+const hy =
+  q % 2 !== 0
+    ? row - 1
+    : row;
 
 const key = `${q},${hy}`;
 
