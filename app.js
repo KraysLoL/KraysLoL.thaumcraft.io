@@ -1310,27 +1310,25 @@ function buildResearchFromDetections(items, imgWidth, imgHeight) {
 
     const hx = Math.round(relX / STEP_X);
 
-    // row сейчас удвоен
-    const row2 = Math.round(relY / STEP_Y);
+// реальный ряд, без row2 и без /2
+const row = Math.round(relY / STEP_Y);
 
-    // приводим к реальному номеру ряда
-    const row = Math.round(row2 / 2);
+// axial координаты
+const q = hx;
+const hy = row - Math.floor(q / 2);
 
-    // axial
-    const hy = row - Math.floor(hx / 2);
+const key = `${q},${hy}`;
 
-    const key = `${hx},${hy}`;
-
-    console.log({
-      cls: item.cls,
-      relX,
-      relY,
-      hx,
-      row2,
-      row,
-      hy,
-      key,
-    });
+console.log({
+  cls: item.cls,
+  relX,
+  relY,
+  hx,
+  row,
+  q,
+  hy,
+  key,
+});
 
     // клетки вне реальной сетки отбрасываем
     const cell = gridState.get(key);
