@@ -1311,11 +1311,10 @@ function buildResearchFromDetections(items, imgWidth, imgHeight) {
     const hx = Math.round(relX / STEP_X);
 const row = Math.round(relY / STEP_Y);
 
-let hy = row;
+// поправка только для нечётных колонок
+const oddOffset = Math.abs(hx % 2);
 
-if (Math.abs(hx) % 2 === 1 && row > 0) {
-  hy--;
-}
+const hy = row - Math.floor((hx + oddOffset) / 2);
 
 const key = `${hx},${hy}`;
 
@@ -1323,10 +1322,10 @@ console.log({
   cls: item.cls,
   hx,
   row,
+  oddOffset,
   hy,
   key
 });
-
     // клетки вне реальной сетки отбрасываем
     const cell = gridState.get(key);
 
