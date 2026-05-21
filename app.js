@@ -1309,13 +1309,12 @@ function buildResearchFromDetections(items, imgWidth, imgHeight) {
     const relY = item.y - imgCenterY;
 
     const hx = Math.round(relX / STEP_X);
-
-// реальный ряд, без row2 и без /2
 const row = Math.round(relY / STEP_Y);
 
-// axial координаты
 const q = hx;
-const hy = row - Math.floor(q / 2);
+
+// поправка для odd-q
+const hy = row - Math.floor((q + 1) / 2);
 
 const key = `${q},${hy}`;
 
@@ -1327,7 +1326,7 @@ console.log({
   row,
   q,
   hy,
-  key,
+  key
 });
 
     // клетки вне реальной сетки отбрасываем
