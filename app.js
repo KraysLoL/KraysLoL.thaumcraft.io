@@ -877,3 +877,608 @@ document.addEventListener('DOMContentLoaded', () => {
 // Экспортируем для использования в grid.js
 window.scheduleTableRefresh = scheduleTableRefresh;
 window.refreshAspectsTable = refreshAspectsTable;
+/////////////////////////////////////////////////////////
+// YOLO ONNX РАСПОЗНАВАНИЕ
+/////////////////////////////////////////////////////////
+
+const INPUT=640;
+const IOU=.45;
+const MAX_DETECTIONS=300;
+
+let ortSession=null;
+let classNames=[];
+let originalImg=null;
+let conf=.25;
+
+const recognitionCanvas=
+document.getElementById(
+"recognitionCanvas"
+);
+
+const rctx=
+recognitionCanvas.getContext(
+"2d"
+);
+
+function recogLog(msg,error=false){
+
+const div=
+document.getElementById(
+"log"
+);
+
+const el=
+document.createElement(
+"div"
+);
+
+el.style.color=
+error?
+"#ff8888":
+"#88ff88";
+
+el.innerText=
+"[YOLO] "+msg;
+
+div.appendChild(el);
+
+div.scrollTop=
+div.scrollHeight;
+
+console.log(msg);
+
+}
+
+
+function sigmoid(x){
+
+return 1/
+(
+1+Math.exp(-x)
+);
+
+}
+
+
+document
+.getElementById(
+"conf"
+)
+.oninput=e=>{
+
+conf=
+parseFloat(
+e.target.value
+);
+
+document
+.getElementById(
+"confv"
+).innerText=
+conf;
+
+if(originalImg){
+
+recognizeAspects(
+originalImg
+);
+
+}
+
+};
+
+
+document
+.getElementById(
+"clearRecognitionLog"
+)
+.onclick=()=>{
+
+document
+.getElementById(
+"log"
+)
+innerHTML='';
+
+};
+
+
+async function initYOLO(){
+
+try{
+
+recogLog(
+"загрузка классов..."
+);
+
+let txt=
+await(
+await fetch(
+"/models/models/field_class_names.txt"
+)
+).text();
+
+classNames=
+txt
+.split(/\r?\n/)
+.filter(
+x=>x.trim()
+);
+
+recogLog(
+"class="+
+classNames.length
+);
+
+
+recogLog(
+"загрузка модели..."
+);
+
+ortSession=
+await ort
+.InferenceSession
+.create(
+"/models/models/field_object_detection.onnx"
+);
+
+recogLog(
+"YOLO готова",
+false
+);
+
+}
+catch(e){
+
+recogLog(
+e.message,
+true
+);
+
+}
+
+}
+
+
+
+function preprocess(img){
+
+const c=
+document.createElement(
+"canvas"
+);
+
+c.width=INPUT;
+c.height=INPUT;
+
+const cx=
+c.getContext("2d");
+
+cx.fillStyle=
+"black";
+
+cx.fillRect(
+0,
+0,
+INPUT,
+INPUT
+);
+
+let scale=
+Math.min(
+INPUT/img.width,
+INPUT/img.height
+);
+
+let w=
+img.width*scale;
+
+let h=
+img.height*scale;
+
+let dx=
+(INPUT-w)/2;
+
+let dy=
+(INPUT-h)/2;
+
+cx.drawImage(
+img,
+dx,
+dy,
+w,
+h
+);
+
+const pixels=
+cx
+.getImageData(
+0,
+0,
+INPUT,
+INPUT
+).data;
+
+const size=
+INPUT*INPUT;
+
+const data=
+new Float32Array(
+3*size
+);
+
+for(
+let i=0;
+i<size;
+i++
+){
+
+data[i]=
+pixels[i*4]/255;
+
+data[size+i]=
+pixels[i*4+1]/255;
+
+data[2*size+i]=
+pixels[i*4+2]/255;
+
+}
+
+return{
+
+tensor:
+new ort.Tensor(
+"float32",
+data,
+[1,3,INPUT,INPUT]
+),
+
+scale,
+dx,
+dy
+
+};
+
+}
+
+
+
+function iou(a,b){
+
+const x1=
+Math.max(a.x,b.x);
+
+const y1=
+Math.max(a.y,b.y);
+
+const x2=
+Math.min(
+a.x+a.w,
+b.x+b.w
+);
+
+const y2=
+Math.min(
+a.y+a.h,
+b.y+b.h
+);
+
+const inter=
+Math.max(
+0,
+x2-x1
+)
+*
+Math.max(
+0,
+y2-y1
+);
+
+const union=
+a.w*a.h+
+b.w*b.h-
+inter;
+
+return inter/union;
+
+}
+
+
+
+async function recognizeAspects(img){
+
+if(!ortSession)
+return;
+
+try{
+
+const prep=
+preprocess(
+img
+);
+
+const result=
+await ortSession.run({
+
+images:
+prep.tensor
+
+});
+
+const out=
+result.output0;
+
+const data=
+out.data;
+
+const dims=
+out.dims;
+
+let numChannels=
+dims[1];
+
+let numPred=
+dims[2];
+
+let det=[];
+
+
+for(
+let i=0;
+i<numPred;
+i++
+){
+
+let cx=
+data[
+0*numPred+i
+];
+
+let cy=
+data[
+1*numPred+i
+];
+
+let w=
+data[
+2*numPred+i
+];
+
+let h=
+data[
+3*numPred+i
+];
+
+let obj=
+sigmoid(
+data[
+4*numPred+i
+]
+);
+
+if(
+obj<conf
+)
+continue;
+
+
+let best=0;
+let cls=-1;
+
+for(
+let c=0;
+c<classNames.length;
+c++
+){
+
+let p=
+sigmoid(
+
+data[
+(c+5)
+*
+numPred+i
+]
+
+);
+
+if(
+p>best
+){
+
+best=p;
+cls=c;
+
+}
+
+}
+
+let score=
+obj*best;
+
+if(
+score<conf
+)
+continue;
+
+det.push({
+
+x:cx-w/2,
+y:cy-h/2,
+w,
+h,
+score,
+cls
+
+});
+
+}
+
+
+
+det.sort(
+(a,b)=>
+b.score-a.score
+);
+
+
+let final=[];
+
+for(
+let d of det
+){
+
+let keep=true;
+
+for(
+let f of final
+){
+
+if(
+d.cls===f.cls &&
+iou(d,f)>IOU
+){
+
+keep=false;
+break;
+
+}
+
+}
+
+if(keep)
+final.push(d);
+
+}
+
+
+recognitionCanvas.width=
+img.width;
+
+recognitionCanvas.height=
+img.height;
+
+rctx.drawImage(
+img,
+0,
+0
+);
+
+
+for(
+let d of final
+){
+
+let x=
+(d.x-prep.dx)
+/
+prep.scale;
+
+let y=
+(d.y-prep.dy)
+/
+prep.scale;
+
+let w=
+d.w/
+prep.scale;
+
+let h=
+d.h/
+prep.scale;
+
+rctx.strokeStyle=
+"#ffaa00";
+
+rctx.lineWidth=2;
+
+rctx.strokeRect(
+x,
+y,
+w,
+h
+);
+
+const name=
+classNames[d.cls];
+
+rctx.fillStyle=
+"#ffcc00";
+
+rctx.font=
+"14px monospace";
+
+rctx.fillText(
+
+name+
+" "+
+(
+d.score*100
+).toFixed(1)
++"%",
+
+x,
+y-4
+
+);
+
+recogLog(
+name+
+" "+
+(
+d.score*100
+).toFixed(1)+
+"%"
+);
+
+}
+
+}
+catch(e){
+
+recogLog(
+e.message,
+true
+);
+
+}
+
+}
+
+
+
+document
+.getElementById(
+"uploadAspects"
+)
+.onchange=e=>{
+
+const file=
+e.target.files[0];
+
+if(!file)
+return;
+
+const img=
+new Image();
+
+img.onload=()=>{
+
+originalImg=
+img;
+
+recognizeAspects(
+img
+);
+
+};
+
+img.src=
+URL.createObjectURL(
+file
+);
+
+};
+
+
+initYOLO();
