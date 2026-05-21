@@ -1295,6 +1295,8 @@ function buildResearchFromDetections(items, imgWidth, imgHeight) {
       cls: item.cls,
       relX,
       relY,
+      col,
+      row,
       hx,
       hy,
       key,
