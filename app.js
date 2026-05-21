@@ -1273,16 +1273,21 @@ function buildResearchFromDetections(items, imgWidth, imgHeight) {
 
   for (const item of items) {
     const relX = item.x - imgCenterX;
-
     const relY = item.y - imgCenterY;
 
-    // напрямую в координаты гекса
-    const hx = Math.round(relX / STEP_X);
+    // реальные шаги из логов
+    const STEP_X = 54;
+    const STEP_Y = 31;
 
+    // колонка
+    const col = Math.round(relX / STEP_X);
+
+    // строка
     const row = Math.round(relY / STEP_Y);
 
-    // odd-q → axial
-    const hy = row - Math.floor(hx / 2);
+    // axial
+    const hx = col;
+    const hy = row - Math.floor((col + (col & 1)) / 2);
 
     const key = `${hx},${hy}`;
 
