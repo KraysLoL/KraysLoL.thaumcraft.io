@@ -978,7 +978,7 @@ document
 .getElementById(
 "log"
 )
-innerHTML='';
+.innerHTML='';
 
 };
 
