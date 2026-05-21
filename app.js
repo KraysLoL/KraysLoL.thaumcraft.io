@@ -1309,9 +1309,11 @@ function buildResearchFromDetections(items, imgWidth, imgHeight) {
     const relY = item.y - imgCenterY;
 
     const hx = Math.round(relX / STEP_X);
-const row = Math.round(relY / STEP_Y);
 
-const hy = row - Math.floor((hx - (hx & 1)) / 2);
+// реальный шаг ряда
+const row = Math.round(relY / (STEP_Y * 2));
+
+const hy = row - Math.floor(hx / 2);
 
 const key = `${hx},${hy}`;
 
