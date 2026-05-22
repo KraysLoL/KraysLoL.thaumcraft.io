@@ -216,10 +216,7 @@ function connectAllAspects() {
   const placed = [];
   for (const [key, cell] of gridState) {
     if (cell.aspect && !cell.generated) {
-      placed.push({
-        key,
-        aspect: cell.aspect,
-      });
+      placed.push({ key, aspect: cell.aspect });
     }
   }
 
@@ -236,103 +233,44 @@ function connectAllAspects() {
   remaining.shift();
 
   let totalAdded = 0;
-
-// раньше было 5
-const MAX_LENGTH_OFFSET = gridState.size;
-
-// защита от бесконечного цикла
-let failedAttempts = 0;
+  const MAX_LENGTH_OFFSET = gridState.size;
+  let failedAttempts = 0;
 
   while (remaining.length) {
     let best = null;
     let bestMinDist = Infinity;
 
     for (const target of remaining) {
+      const candidates = new Set();
 
-    // кандидаты входа в сеть
-    const candidates = [];
-
-    for (const netKey of network) {
-
-        candidates.push(netKey);
-
-        const [x,y]=netKey
-            .split(',')
-            .map(Number);
-
-        // соседние generated клетки
-        for(const [dx,dy] of getNeighbors(x,y)){
-
-            const nk=`${x+dx},${y+dy}`;
-
-            if(!gridState.has(nk))
-                continue;
-
-            const c=gridState.get(nk);
-
-            if(
-                c.generated &&
-                c.aspect
-            ){
-                candidates.push(nk);
-            }
+      for (const netKey of network) {
+        candidates.add(netKey);
+        const [x, y] = netKey.split(',').map(Number);
+        for (const [dx, dy] of getNeighbors(x, y)) {
+          const nk = `${x + dx},${y + dy}`;
+          if (!gridState.has(nk)) continue;
+          const c = gridState.get(nk);
+          if (c.generated && c.aspect) candidates.add(nk);
         }
-    }
+      }
 
-    for(const candidate of candidates){
+      for (const candidate of candidates) {
+        const netCell = gridState.get(candidate);
+        if (!netCell?.aspect) continue;
 
-        const netCell =
-            gridState.get(candidate);
-
-        if(!netCell?.aspect)
-            continue;
-
-        const shortestPath =
-            findShortestPath(
-                candidate,
-                target.key
-            );
-
-        if(!shortestPath)
-            continue;
-
-        const dist=
-            shortestPath.length-1;
-
-        if(dist<bestMinDist){
-
-            bestMinDist=dist;
-
-            best={
-
-                fromKey:candidate,
-
-                toKey:target.key,
-
-                fromAsp:
-                    netCell.aspect,
-
-                toAsp:
-                    target.aspect,
-
-                minDist:dist,
-
-                shortestPath
-            };
-        }
-    }
-}
+        const shortestPath = findShortestPath(candidate, target.key);
         if (!shortestPath) continue;
+
         const dist = shortestPath.length - 1;
         if (dist < bestMinDist) {
           bestMinDist = dist;
           best = {
-            fromKey: netKey,
+            fromKey: candidate,
             toKey: target.key,
             fromAsp: netCell.aspect,
             toAsp: target.aspect,
             minDist: dist,
-            shortestPath: shortestPath,
+            shortestPath: shortestPath
           };
         }
       }
@@ -349,12 +287,7 @@ let failedAttempts = 0;
 
     for (let offset = 0; offset <= MAX_LENGTH_OFFSET; offset++) {
       const targetLen = best.minDist + offset;
-      const chain = findAspectChainOfLength(
-        best.fromAsp,
-        best.toAsp,
-        targetLen,
-        aspectGraph,
-      );
+      const chain = findAspectChainOfLength(best.fromAsp, best.toAsp, targetLen, aspectGraph);
       if (!chain) continue;
       const path = findPathOfExactLength(best.fromKey, best.toKey, targetLen);
       if (!path) continue;
@@ -363,61 +296,32 @@ let failedAttempts = 0;
       usedLength = targetLen;
       break;
     }
+
     if (!finalPath || !finalChain) {
-
-    log(
-      `Не удалось соединить ${best.fromAsp} → ${best.toAsp}`,
-      "warn"
-    );
-
-    // вынимаем текущую цель
-    const idx = remaining.findIndex(
-        x => x.key === best.toKey
-    );
-
-    if (idx !== -1) {
-        const failedNode = remaining.splice(idx,1)[0];
-
-        // кладём в конец очереди
+      log(`Не удалось соединить ${best.fromAsp} → ${best.toAsp}`, "warn");
+      const idx = remaining.findIndex(x => x.key === best.toKey);
+      if (idx !== -1) {
+        const failedNode = remaining.splice(idx, 1)[0];
         remaining.push(failedNode);
-    }
-
-    failedAttempts++;
-
-    // если сделали полный круг и ничего
-    // не смогли присоединить
-    if (failedAttempts >= remaining.length) {
-
-        log(
-          "Невозможно достроить единую сеть",
-          "error"
-        );
-
+      }
+      failedAttempts++;
+      if (failedAttempts >= remaining.length) {
+        log("Невозможно достроить единую сеть", "error");
         break;
+      }
+      continue;
     }
 
-    continue;
-}
+    failedAttempts = 0;
+    addUsedAspects(finalChain);
 
-// если соединение удалось — сбрасываем
-failedAttempts = 0;
-addUsedAspects(finalChain);
-
-// теперь только здесь
-addUsedAspects(finalChain);
     const cells = finalPath.slice(1, -1);
     const aspects = finalChain.slice(1, -1);
 
     if (cells.length !== aspects.length) {
-      log(
-        `Ошибка: несовпадение длины (клеток=${cells.length}, аспектов=${aspects.length})`,
-        "error",
-      );
+      log(`Ошибка: несовпадение длины (клеток=${cells.length}, аспектов=${aspects.length})`, "error");
       network.add(best.toKey);
-      remaining.splice(
-        remaining.findIndex((x) => x.key === best.toKey),
-        1,
-      );
+      remaining.splice(remaining.findIndex(x => x.key === best.toKey), 1);
       continue;
     }
 
@@ -428,10 +332,7 @@ addUsedAspects(finalChain);
         cell.generated = true;
         totalAdded++;
       } else if (!cell.generated && cell.aspect !== aspects[i]) {
-        log(
-          `Конфликт: на ${cells[i]} уже есть пользовательский аспект ${cell.aspect}, пропускаем`,
-          "warn",
-        );
+        log(`Конфликт: на ${cells[i]} уже есть пользовательский аспект ${cell.aspect}, пропускаем`, "warn");
         continue;
       } else if (cell.generated && cell.aspect !== aspects[i]) {
         cell.aspect = aspects[i];
@@ -439,23 +340,16 @@ addUsedAspects(finalChain);
     }
 
     network.add(best.toKey);
-    for (const key of finalPath) {
-      network.add(key);
-    }
+    for (const key of finalPath) network.add(key);
 
-    const targetIndex = remaining.findIndex((x) => x.key === best.toKey);
-    if (targetIndex !== -1) {
-      remaining.splice(targetIndex, 1);
-    }
+    const targetIndex = remaining.findIndex(x => x.key === best.toKey);
+    if (targetIndex !== -1) remaining.splice(targetIndex, 1);
 
-    log(
-      `🔗 ${best.fromAsp} → ${best.toAsp} (длина пути ${usedLength} рёбер)`,
-      "info",
-    );
+    log(`🔗 ${best.fromAsp} → ${best.toAsp} (длина пути ${usedLength} рёбер)`, "info");
   }
 
   redraw();
-  scheduleTableRefresh(); // вместо refreshAspectsTable()
+  scheduleTableRefresh();
   log(`✅ Готово. Добавлено новых аспектов: ${totalAdded}`, "success");
 }
 
