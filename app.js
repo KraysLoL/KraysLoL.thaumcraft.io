@@ -1324,9 +1324,8 @@ const STEP_Y = median(yDiff);
 
     const hx = Math.round(relX / STEP_X);
 
-// реальный шаг ряда
-const row = Math.round(
-   relY / (STEP_Y * 2)
+const row = Math.floor(
+   relY / (STEP_Y * 2) + 0.5
 );
 
 const hy = row - Math.round(hx / 2);
@@ -1334,11 +1333,11 @@ const hy = row - Math.round(hx / 2);
 const key = `${hx},${hy}`;
 
 console.log({
-  cls: item.cls,
-  hx,
-  row,
-  hy,
-  key
+   cls:item.cls,
+   hx,
+   row,
+   hy,
+   key
 });
     // клетки вне реальной сетки отбрасываем
     const cell = gridState.get(key);
