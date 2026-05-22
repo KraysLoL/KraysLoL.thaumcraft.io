@@ -1396,3 +1396,22 @@ document.getElementById("uploadAspects").onchange = (e) => {
 };
 
 initYOLO();
+function loadTestImage(name) {
+    const img = new Image();
+
+    img.onload = () => {
+        originalImg = img;
+        recognizeAspects(img);
+    };
+
+    img.src = "./" + name;
+}
+
+document.getElementById("testR3").onclick =
+    ()=>loadTestImage("test_r3.png");
+
+document.getElementById("testR4").onclick =
+    ()=>loadTestImage("test_r4.png");
+
+document.getElementById("testR5").onclick =
+    ()=>loadTestImage("test_r5.png");
