@@ -89,9 +89,15 @@ function buildAspectGraph() {
 }
 
 function findAspectChainOfLength(startAsp, endAsp, exactLength, graph) {
-  if (exactLength === 0 && startAsp === endAsp) return [startAsp];
+  if (exactLength === 0 && startAsp === endAsp) {
+    return [startAsp];
+  }
+
   const cacheKey = `${startAsp}|${endAsp}|${exactLength}`;
-  if (chainCache.has(cacheKey)) return chainCache.get(cacheKey);
+
+  if (chainCache.has(cacheKey)) {
+    return chainCache.get(cacheKey);
+  }
 
   const queue = [
     {
@@ -100,24 +106,41 @@ function findAspectChainOfLength(startAsp, endAsp, exactLength, graph) {
       depth: 0,
     },
   ];
+
   let head = 0;
-  while (head < queue.length) {
+
+  const MAX_QUEUE = 5000;
+
+  while (head < queue.length && queue.length < MAX_QUEUE) {
     const cur = queue[head++];
+
     if (cur.depth === exactLength && cur.node === endAsp) {
       chainCache.set(cacheKey, cur.path);
+
       return cur.path;
     }
-    if (cur.depth >= exactLength) continue;
+
+    if (cur.depth >= exactLength) {
+      continue;
+    }
+
     for (const nb of graph[cur.node] || []) {
-      if (cur.path.includes(nb)) continue;
+      if (cur.path.includes(nb)) {
+        continue;
+      }
+
       queue.push({
         node: nb,
+
         depth: cur.depth + 1,
+
         path: [...cur.path, nb],
       });
     }
   }
+
   chainCache.set(cacheKey, null);
+
   return null;
 }
 
@@ -125,69 +148,125 @@ function findPathOfExactLength(startKey, endKey, exactEdges) {
   if (exactEdges === 0 && startKey === endKey) return [startKey];
 
   const cacheKey = `${startKey}|${endKey}|${exactEdges}`;
+
   if (connectionCache.has(cacheKey)) return connectionCache.get(cacheKey);
 
   const queue = [
     {
       key: startKey,
       path: [startKey],
-      visitedSet: new Set([startKey]),
     },
   ];
+
   let head = 0;
 
-  while (head < queue.length) {
-    const { key, path, visitedSet } = queue[head++];
-    const depth = path.length - 1;
+  const MAX_QUEUE = 10000;
 
-    if (depth === exactEdges && key === endKey) {
-      connectionCache.set(cacheKey, path);
-      return path;
+  while (head < queue.length && head < MAX_QUEUE) {
+    const cur = queue[head++];
+
+    const depth = cur.path.length - 1;
+
+    if (depth === exactEdges && cur.key === endKey) {
+      connectionCache.set(cacheKey, cur.path);
+
+      return cur.path;
     }
+
     if (depth >= exactEdges) continue;
 
-    const [x, y] = key.split(",").map(Number);
+    const [x, y] = cur.key.split(",").map(Number);
+
     for (const [dx, dy] of getNeighbors(x, y)) {
       const nKey = `${x + dx},${y + dy}`;
-      if (!gridState.has(nKey)) continue;
+
+      if (!gridState.has(nKey)) {
+        continue;
+      }
+
       const cell = gridState.get(nKey);
 
-if (!cell.active && nKey !== endKey)
-    continue;
+      if (!cell.active && nKey !== endKey) {
+        continue;
+      }
 
-// пользовательские аспекты нельзя перетирать
-if (
-    cell.aspect &&
-    !cell.generated &&
-    nKey !== endKey
-){
-    continue;
-}
+      if (cell.aspect && !cell.generated && nKey !== endKey) {
+        continue;
+      }
 
-// автосгенерированные клетки можно
-if (
-    visitedSet.has(nKey)
-    && !cell.generated
-){
-    continue;
-}
+      // только локальная проверка
+      if (cur.path.includes(nKey)) {
+        continue;
+      }
 
-      const newVisited = new Set(visitedSet);
-      newVisited.add(nKey);
       queue.push({
         key: nKey,
-        path: [...path, nKey],
-        visitedSet: newVisited,
+
+        path: [...cur.path, nKey],
       });
     }
   }
 
   connectionCache.set(cacheKey, null);
+
   return null;
 }
 
 function clearPathCache() {
   connectionCache.clear();
+}
+function getGeneratedNeighbors(startKey, maxDepth = 2) {
+  const result = [];
+
+  const visited = new Set([startKey]);
+
+  const queue = [
+    {
+      key: startKey,
+      depth: 0,
+    },
+  ];
+
+  while (queue.length && visited.size < 30) {
+    const cur = queue.shift();
+
+    if (cur.depth >= maxDepth) {
+      continue;
+    }
+
+    const [x, y] = cur.key.split(",").map(Number);
+
+    for (const [dx, dy] of getNeighbors(x, y)) {
+      const nk = `${x + dx},${y + dy}`;
+
+      if (visited.has(nk)) {
+        continue;
+      }
+
+      visited.add(nk);
+
+      if (!gridState.has(nk)) {
+        continue;
+      }
+
+      const cell = gridState.get(nk);
+
+      if (!cell.aspect) {
+        continue;
+      }
+
+      if (cell.generated) {
+        result.push(nk);
+      }
+
+      queue.push({
+        key: nk,
+        depth: cur.depth + 1,
+      });
+    }
+  }
+
+  return [...new Set(result)];
 }
 
 function clearGeneratedAspects() {
@@ -233,10 +312,28 @@ function connectAllAspects() {
   remaining.shift();
 
   let totalAdded = 0;
-  const MAX_LENGTH_OFFSET = gridState.size;
+  const MAX_LENGTH_OFFSET = Math.min(12, gridState.size);
   let failedAttempts = 0;
+  const startedAt = performance.now();
+  const MAX_WORK_TIME = 3000; // 3 секунды
+
+  let iterationCount = 0;
 
   while (remaining.length) {
+    iterationCount++;
+
+    if (iterationCount > 100) {
+      log("Поиск остановлен: слишком много итераций", "error");
+
+      break;
+    }
+
+    if (performance.now() - startedAt > MAX_WORK_TIME) {
+      log("Поиск остановлен: превышено время", "error");
+
+      break;
+    }
+
     let best = null;
     let bestMinDist = Infinity;
 
@@ -245,15 +342,13 @@ function connectAllAspects() {
 
       for (const netKey of network) {
         candidates.add(netKey);
-        const [x, y] = netKey.split(',').map(Number);
-        for (const [dx, dy] of getNeighbors(x, y)) {
-          const nk = `${x + dx},${y + dy}`;
-          if (!gridState.has(nk)) continue;
-          const c = gridState.get(nk);
-          if (c.generated && c.aspect) candidates.add(nk);
+
+        const generatedNearby = getGeneratedNeighbors(netKey, 2);
+
+        for (const nk of generatedNearby) {
+          candidates.add(nk);
         }
       }
-
       for (const candidate of candidates) {
         const netCell = gridState.get(candidate);
         if (!netCell?.aspect) continue;
@@ -270,7 +365,7 @@ function connectAllAspects() {
             fromAsp: netCell.aspect,
             toAsp: target.aspect,
             minDist: dist,
-            shortestPath: shortestPath
+            shortestPath: shortestPath,
           };
         }
       }
@@ -287,7 +382,12 @@ function connectAllAspects() {
 
     for (let offset = 0; offset <= MAX_LENGTH_OFFSET; offset++) {
       const targetLen = best.minDist + offset;
-      const chain = findAspectChainOfLength(best.fromAsp, best.toAsp, targetLen, aspectGraph);
+      const chain = findAspectChainOfLength(
+        best.fromAsp,
+        best.toAsp,
+        targetLen,
+        aspectGraph,
+      );
       if (!chain) continue;
       const path = findPathOfExactLength(best.fromKey, best.toKey, targetLen);
       if (!path) continue;
@@ -299,13 +399,13 @@ function connectAllAspects() {
 
     if (!finalPath || !finalChain) {
       log(`Не удалось соединить ${best.fromAsp} → ${best.toAsp}`, "warn");
-      const idx = remaining.findIndex(x => x.key === best.toKey);
+      const idx = remaining.findIndex((x) => x.key === best.toKey);
       if (idx !== -1) {
         const failedNode = remaining.splice(idx, 1)[0];
         remaining.push(failedNode);
       }
       failedAttempts++;
-      if (failedAttempts >= remaining.length) {
+      if (failedAttempts > remaining.length * 2) {
         log("Невозможно достроить единую сеть", "error");
         break;
       }
@@ -319,9 +419,15 @@ function connectAllAspects() {
     const aspects = finalChain.slice(1, -1);
 
     if (cells.length !== aspects.length) {
-      log(`Ошибка: несовпадение длины (клеток=${cells.length}, аспектов=${aspects.length})`, "error");
+      log(
+        `Ошибка: несовпадение длины (клеток=${cells.length}, аспектов=${aspects.length})`,
+        "error",
+      );
       network.add(best.toKey);
-      remaining.splice(remaining.findIndex(x => x.key === best.toKey), 1);
+      remaining.splice(
+        remaining.findIndex((x) => x.key === best.toKey),
+        1,
+      );
       continue;
     }
 
@@ -332,7 +438,10 @@ function connectAllAspects() {
         cell.generated = true;
         totalAdded++;
       } else if (!cell.generated && cell.aspect !== aspects[i]) {
-        log(`Конфликт: на ${cells[i]} уже есть пользовательский аспект ${cell.aspect}, пропускаем`, "warn");
+        log(
+          `Конфликт: на ${cells[i]} уже есть пользовательский аспект ${cell.aspect}, пропускаем`,
+          "warn",
+        );
         continue;
       } else if (cell.generated && cell.aspect !== aspects[i]) {
         cell.aspect = aspects[i];
@@ -342,10 +451,13 @@ function connectAllAspects() {
     network.add(best.toKey);
     for (const key of finalPath) network.add(key);
 
-    const targetIndex = remaining.findIndex(x => x.key === best.toKey);
+    const targetIndex = remaining.findIndex((x) => x.key === best.toKey);
     if (targetIndex !== -1) remaining.splice(targetIndex, 1);
 
-    log(`🔗 ${best.fromAsp} → ${best.toAsp} (длина пути ${usedLength} рёбер)`, "info");
+    log(
+      `🔗 ${best.fromAsp} → ${best.toAsp} (длина пути ${usedLength} рёбер)`,
+      "info",
+    );
   }
 
   redraw();
@@ -714,8 +826,8 @@ function clearUsedAspectsHighlight() {
 function addUsedAspects(aspectsList) {
   if (!aspectsList) return;
 
-  aspectsList.forEach(aspect => {
-      currentUsedAspects.add(aspect);
+  aspectsList.forEach((aspect) => {
+    currentUsedAspects.add(aspect);
   });
 
   updateAspectsTable();
@@ -1331,27 +1443,27 @@ function buildResearchFromDetections(items, imgWidth, imgHeight) {
 
     const hx = Math.round(relX / STEP_X);
 
-// реальный шаг ряда
-const row = Math.round(relY / (STEP_Y * 2));
+    // реальный шаг ряда
+    const row = Math.round(relY / (STEP_Y * 2));
 
-let hy = row - Math.floor(hx / 2);
+    let hy = row - Math.floor(hx / 2);
 
-// только маленькие шаблоны
-const compactLayout = items.length < 25;
+    // только маленькие шаблоны
+    const compactLayout = items.length < 25;
 
-if (compactLayout && Math.abs(hx) === 1) {
-    hy -= 1;
-}
+    if (compactLayout && Math.abs(hx) === 1) {
+      hy -= 1;
+    }
 
-const key = `${hx},${hy}`;
+    const key = `${hx},${hy}`;
 
-console.log({
-  cls: item.cls,
-  hx,
-  row,
-  hy,
-  key
-});
+    console.log({
+      cls: item.cls,
+      hx,
+      row,
+      hy,
+      key,
+    });
     // клетки вне реальной сетки отбрасываем
     const cell = gridState.get(key);
 
@@ -1413,21 +1525,18 @@ document.getElementById("uploadAspects").onchange = (e) => {
 
 initYOLO();
 function loadTestImage(name) {
-    const img = new Image();
+  const img = new Image();
 
-    img.onload = () => {
-        originalImg = img;
-        recognizeAspects(img);
-    };
+  img.onload = () => {
+    originalImg = img;
+    recognizeAspects(img);
+  };
 
-    img.src = "./" + name;
+  img.src = "./" + name;
 }
 
-document.getElementById("testR3").onclick =
-    ()=>loadTestImage("test_r3.png");
+document.getElementById("testR3").onclick = () => loadTestImage("test_r3.png");
 
-document.getElementById("testR4").onclick =
-    ()=>loadTestImage("test_r4.png");
+document.getElementById("testR4").onclick = () => loadTestImage("test_r4.png");
 
-document.getElementById("testR5").onclick =
-    ()=>loadTestImage("test_r5.png");
+document.getElementById("testR5").onclick = () => loadTestImage("test_r5.png");
