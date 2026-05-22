@@ -88,60 +88,90 @@ function buildAspectGraph() {
   return result;
 }
 
-function findAspectChainOfLength(startAsp, endAsp, exactLength, graph) {
-  if (exactLength === 0 && startAsp === endAsp) {
-    return [startAsp];
-  }
-
-  const cacheKey = `${startAsp}|${endAsp}|${exactLength}`;
-
-  if (chainCache.has(cacheKey)) {
-    return chainCache.get(cacheKey);
-  }
-
-  const queue = [
-    {
-      node: startAsp,
-      path: [startAsp],
-      depth: 0,
-    },
-  ];
-
-  let head = 0;
-
-  const MAX_QUEUE = 5000;
-
-  while (head < queue.length && queue.length < MAX_QUEUE) {
-    const cur = queue[head++];
-
-    if (cur.depth === exactLength && cur.node === endAsp) {
-      chainCache.set(cacheKey, cur.path);
-
-      return cur.path;
+function findAspectChainOfLength(
+    startAsp,
+    endAsp,
+    exactLength,
+    graph
+){
+    if(
+        exactLength===0 &&
+        startAsp===endAsp
+    ){
+        return [startAsp];
     }
 
-    if (cur.depth >= exactLength) {
-      continue;
+    const cacheKey=
+        `${startAsp}|${endAsp}|${exactLength}`;
+
+    if(
+        chainCache.has(cacheKey)
+    ){
+        return chainCache.get(cacheKey);
     }
 
-    for (const nb of graph[cur.node] || []) {
-      if (cur.path.includes(nb)) {
-        continue;
-      }
+    const queue=[{
+        node:startAsp,
+        path:[startAsp],
+        depth:0
+    }];
 
-      queue.push({
-        node: nb,
+    let head=0;
 
-        depth: cur.depth + 1,
+    const MAX_QUEUE=10000;
 
-        path: [...cur.path, nb],
-      });
+    while(
+        head<queue.length &&
+        head<MAX_QUEUE
+    ){
+
+        const cur=queue[head++];
+
+        if(
+            cur.depth===exactLength &&
+            cur.node===endAsp
+        ){
+
+            chainCache.set(
+                cacheKey,
+                cur.path
+            );
+
+            return cur.path;
+        }
+
+        if(
+            cur.depth>=exactLength
+        ){
+            continue;
+        }
+
+        for(
+            const nb
+            of graph[cur.node]||[]
+        ){
+
+            queue.push({
+
+                node:nb,
+
+                depth:
+                    cur.depth+1,
+
+                path:[
+                    ...cur.path,
+                    nb
+                ]
+            });
+        }
     }
-  }
 
-  chainCache.set(cacheKey, null);
+    chainCache.set(
+        cacheKey,
+        null
+    );
 
-  return null;
+    return null;
 }
 
 function findPathOfExactLength(startKey, endKey, exactEdges) {
