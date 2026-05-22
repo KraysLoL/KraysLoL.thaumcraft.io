@@ -234,4 +234,3 @@ window.findShortestPath = findShortestPath;
 window.pixelToHex = pixelToHex;
 window.getNeighbors = getNeighbors;
 window.HEX_SIZE = HEX_SIZE;
-window.scheduleTableRefresh = scheduleTableRefresh;
