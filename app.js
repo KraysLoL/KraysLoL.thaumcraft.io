@@ -276,20 +276,34 @@ let failedAttempts = 0;
     }
     if (!finalPath || !finalChain) {
 
-    failedAttempts++;
-
     log(
       `Не удалось соединить ${best.fromAsp} → ${best.toAsp}`,
-      "error"
+      "warn"
     );
 
-    // если слишком много попыток —
-    // реально больше соединить нельзя
-    if (failedAttempts > remaining.length * 3) {
+    // вынимаем текущую цель
+    const idx = remaining.findIndex(
+        x => x.key === best.toKey
+    );
+
+    if (idx !== -1) {
+        const failedNode = remaining.splice(idx,1)[0];
+
+        // кладём в конец очереди
+        remaining.push(failedNode);
+    }
+
+    failedAttempts++;
+
+    // если сделали полный круг и ничего
+    // не смогли присоединить
+    if (failedAttempts >= remaining.length) {
+
         log(
-          "Невозможно построить единую сеть",
+          "Невозможно достроить единую сеть",
           "error"
         );
+
         break;
     }
 
