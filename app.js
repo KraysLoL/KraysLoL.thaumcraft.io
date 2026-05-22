@@ -151,8 +151,26 @@ function findPathOfExactLength(startKey, endKey, exactEdges) {
       const nKey = `${x + dx},${y + dy}`;
       if (!gridState.has(nKey)) continue;
       const cell = gridState.get(nKey);
-      if (!cell.active && nKey !== endKey) continue;
-      if (visitedSet.has(nKey)) continue;
+
+if (!cell.active && nKey !== endKey)
+    continue;
+
+// пользовательские аспекты нельзя перетирать
+if (
+    cell.aspect &&
+    !cell.generated &&
+    nKey !== endKey
+){
+    continue;
+}
+
+// автосгенерированные клетки можно
+if (
+    visitedSet.has(nKey)
+    && !cell.generated
+){
+    continue;
+}
 
       const newVisited = new Set(visitedSet);
       newVisited.add(nKey);
