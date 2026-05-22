@@ -218,7 +218,12 @@ function connectAllAspects() {
   remaining.shift();
 
   let totalAdded = 0;
-  const MAX_LENGTH_OFFSET = 5;
+
+// раньше было 5
+const MAX_LENGTH_OFFSET = gridState.size;
+
+// защита от бесконечного цикла
+let failedAttempts = 0;
 
   while (remaining.length) {
     let best = null;
@@ -269,20 +274,33 @@ function connectAllAspects() {
       usedLength = targetLen;
       break;
     }
-    addUsedAspects(finalChain);
     if (!finalPath || !finalChain) {
-      log(
-        `Не удалось соединить ${best.fromAsp} → ${best.toAsp} даже с удлинением`,
-        "error",
-      );
-      network.add(best.toKey);
-      remaining.splice(
-        remaining.findIndex((x) => x.key === best.toKey),
-        1,
-      );
-      continue;
+
+    failedAttempts++;
+
+    log(
+      `Не удалось соединить ${best.fromAsp} → ${best.toAsp}`,
+      "error"
+    );
+
+    // если слишком много попыток —
+    // реально больше соединить нельзя
+    if (failedAttempts > remaining.length * 3) {
+        log(
+          "Невозможно построить единую сеть",
+          "error"
+        );
+        break;
     }
 
+    continue;
+}
+
+// если соединение удалось — сбрасываем
+failedAttempts = 0;
+
+// теперь только здесь
+addUsedAspects(finalChain);
     const cells = finalPath.slice(1, -1);
     const aspects = finalChain.slice(1, -1);
 
