@@ -696,7 +696,12 @@ function clearUsedAspectsHighlight() {
 
 // Добавляем аспекты в список использованных
 function addUsedAspects(aspectsList) {
-  aspectsList.forEach((aspect) => currentUsedAspects.add(aspect));
+  if (!aspectsList) return;
+
+  aspectsList.forEach(aspect => {
+      currentUsedAspects.add(aspect);
+  });
+
   updateAspectsTable();
 }
 
