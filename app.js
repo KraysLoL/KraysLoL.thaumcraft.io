@@ -247,10 +247,81 @@ let failedAttempts = 0;
     let best = null;
     let bestMinDist = Infinity;
 
+    for (const target of remaining) {
+
+    // кандидаты входа в сеть
+    const candidates = [];
+
     for (const netKey of network) {
-      const netCell = gridState.get(netKey);
-      for (const target of remaining) {
-        const shortestPath = findShortestPath(netKey, target.key);
+
+        candidates.push(netKey);
+
+        const [x,y]=netKey
+            .split(',')
+            .map(Number);
+
+        // соседние generated клетки
+        for(const [dx,dy] of getNeighbors(x,y)){
+
+            const nk=`${x+dx},${y+dy}`;
+
+            if(!gridState.has(nk))
+                continue;
+
+            const c=gridState.get(nk);
+
+            if(
+                c.generated &&
+                c.aspect
+            ){
+                candidates.push(nk);
+            }
+        }
+    }
+
+    for(const candidate of candidates){
+
+        const netCell =
+            gridState.get(candidate);
+
+        if(!netCell?.aspect)
+            continue;
+
+        const shortestPath =
+            findShortestPath(
+                candidate,
+                target.key
+            );
+
+        if(!shortestPath)
+            continue;
+
+        const dist=
+            shortestPath.length-1;
+
+        if(dist<bestMinDist){
+
+            bestMinDist=dist;
+
+            best={
+
+                fromKey:candidate,
+
+                toKey:target.key,
+
+                fromAsp:
+                    netCell.aspect,
+
+                toAsp:
+                    target.aspect,
+
+                minDist:dist,
+
+                shortestPath
+            };
+        }
+    }
+}
         if (!shortestPath) continue;
         const dist = shortestPath.length - 1;
         if (dist < bestMinDist) {
