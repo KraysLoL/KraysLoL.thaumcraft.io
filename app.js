@@ -94,6 +94,7 @@ function findAspectChainOfLength(
     exactLength,
     graph
 ){
+
     if(
         exactLength===0 &&
         startAsp===endAsp
@@ -116,16 +117,31 @@ function findAspectChainOfLength(
         depth:0
     }];
 
+    const visited=
+        new Set();
+
     let head=0;
 
-    const MAX_QUEUE=10000;
+    const MAX_QUEUE=30000;
 
     while(
         head<queue.length &&
         head<MAX_QUEUE
     ){
 
-        const cur=queue[head++];
+        const cur=
+            queue[head++];
+
+        const state=
+            `${cur.node}|${cur.depth}`;
+
+        if(
+            visited.has(state)
+        ){
+            continue;
+        }
+
+        visited.add(state);
 
         if(
             cur.depth===exactLength &&
@@ -342,7 +358,11 @@ function connectAllAspects() {
   remaining.shift();
 
   let totalAdded = 0;
-  const MAX_LENGTH_OFFSET = Math.min(12, gridState.size);
+  const MAX_LENGTH_OFFSET =
+    Math.min(
+        25,
+        gridState.size*2
+    );
   let failedAttempts = 0;
   const startedAt = performance.now();
   const MAX_WORK_TIME = 3000; // 3 секунды
