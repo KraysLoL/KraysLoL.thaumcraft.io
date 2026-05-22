@@ -1243,15 +1243,7 @@ async function recognizeAspects(img) {
     recogLog(e.message, true);
   }
 }
-function median(arr) {
-  const a = [...arr].sort((x, y) => x - y);
 
-  const mid = Math.floor(a.length / 2);
-
-  return a.length % 2
-    ? a[mid]
-    : (a[mid - 1] + a[mid]) / 2;
-}
 function buildResearchFromDetections(items, imgWidth, imgHeight) {
   if (!items.length) return;
 
@@ -1279,41 +1271,35 @@ function buildResearchFromDetections(items, imgWidth, imgHeight) {
 
   // ---- автоопределение шага X ----
 
-const xs = [...new Set(
-  free.map(v => Math.round(v.x))
-)].sort((a,b)=>a-b);
+  const xs = [...new Set(free.map((v) => Math.round(v.x)))].sort(
+    (a, b) => a - b,
+  );
 
-const xDiff=[];
+  const xDiff = [];
 
-for(let i=1;i<xs.length;i++){
+  for (let i = 1; i < xs.length; i++) {
+    const d = xs[i] - xs[i - 1];
 
-  const d=xs[i]-xs[i-1];
-
-  if(d>10){
-    xDiff.push(d);
+    if (d > 10) xDiff.push(d);
   }
-}
 
-const STEP_X = median(xDiff);
+  const STEP_X = xDiff.reduce((a, b) => a + b, 0) / xDiff.length;
 
   // ---- автоопределение шага Y ----
 
-const ys = [...new Set(
-  free.map(v => Math.round(v.y))
-)].sort((a,b)=>a-b);
+  const ys = [...new Set(free.map((v) => Math.round(v.y)))].sort(
+    (a, b) => a - b,
+  );
 
-const yDiff=[];
+  const yDiff = [];
 
-for(let i=1;i<ys.length;i++){
+  for (let i = 1; i < ys.length; i++) {
+    const d = ys[i] - ys[i - 1];
 
-  const d=ys[i]-ys[i-1];
-
-  if(d>10 && d<40){
-    yDiff.push(d);
+    if (d > 10) yDiff.push(d);
   }
-}
 
-const STEP_Y = median(yDiff);
+  const STEP_Y = yDiff.reduce((a, b) => a + b, 0) / yDiff.length;
 
   console.log("STEP_X", STEP_X, "STEP_Y", STEP_Y);
 
@@ -1324,20 +1310,26 @@ const STEP_Y = median(yDiff);
 
     const hx = Math.round(relX / STEP_X);
 
-const row = Math.floor(
-   relY / (STEP_Y * 2) + 0.5
-);
+// реальный шаг ряда
+const row = Math.round(relY / (STEP_Y * 2));
 
-const hy = row - Math.round(hx / 2);
+let hy = row - Math.floor(hx / 2);
+
+// только маленькие шаблоны
+const compactLayout = items.length < 25;
+
+if (compactLayout && Math.abs(hx) === 1) {
+    hy -= 1;
+}
 
 const key = `${hx},${hy}`;
 
 console.log({
-   cls:item.cls,
-   hx,
-   row,
-   hy,
-   key
+  cls: item.cls,
+  hx,
+  row,
+  hy,
+  key
 });
     // клетки вне реальной сетки отбрасываем
     const cell = gridState.get(key);
