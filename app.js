@@ -1325,9 +1325,13 @@ const STEP_Y = median(yDiff);
     const hx = Math.round(relX / STEP_X);
 
 // реальный шаг ряда
-const row = Math.round(relY / (STEP_Y * 2));
+const row = Math.round(
+   relY / STEP_Y
+);
 
-let hy = row - Math.floor(hx / 2);
+const hy = Math.round(
+   row - hx / 2
+);
 
 const key = `${hx},${hy}`;
 
