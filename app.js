@@ -312,6 +312,7 @@ let failedAttempts = 0;
 
 // если соединение удалось — сбрасываем
 failedAttempts = 0;
+addUsedAspects(finalChain);
 
 // теперь только здесь
 addUsedAspects(finalChain);
