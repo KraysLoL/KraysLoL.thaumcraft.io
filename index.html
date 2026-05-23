@@ -1,336 +1,391 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Thaumcraft Исследования – Умная сеть аспектов</title>
-  <style>
-    * { user-select: none; margin:0; padding:0; box-sizing:border-box; }
-    body {
-      margin: 0;
-      overflow: hidden;
-      font-family: 'Segoe UI', 'Roboto', monospace;
-      background: #0a0f1e;
-    }
-    canvas {
-      display: block;
-      background: #0a0f1e;
-      cursor: crosshair;
-      width: 100%;
-      height: 100vh;
-    }
-    #ui {
-  position:absolute;
-  top:16px;
-  left:16px;
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Thaumcraft Исследования – Умная сеть аспектов</title>
+    <style>
+        /* Обнуление и базовые стили */
+        * {
+          user-select: none;
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
 
-  width:310px;
+        body {
+          overflow: hidden;
+          font-family: 'Segoe UI', 'Roboto', monospace;
+          background: #0a0f1e;
+        }
 
-  max-height:calc(100vh - 32px);
+        canvas {
+          display: block;
+          background: #0a0f1e;
+          cursor: crosshair;
+          width: 100%;
+          height: 100vh;
+        }
 
-  overflow-y:auto;
+        /* UI панель */
+        #ui {
+          position: absolute;
+          top: 16px;
+          left: 16px;
+          width: 310px;
+          max-height: calc(100vh - 32px);
+          overflow-y: auto;
+          color: #f0f0f0;
+          background: rgba(10, 20, 30, 0.94);
+          backdrop-filter: blur(10px);
+          border-radius: 20px;
+          padding: 14px 18px;
+          z-index: 20;
+          border: 1px solid rgba(100, 150, 200, 0.4);
+          box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+          font-family: 'JetBrains Mono', monospace;
+        }
 
-  color:#f0f0f0;
-  background:rgba(10,20,30,.94);
+        /* Скроллбар для UI */
+        #ui::-webkit-scrollbar {
+          width: 8px;
+        }
+        #ui::-webkit-scrollbar-track {
+          background: #152030;
+        }
+        #ui::-webkit-scrollbar-thumb {
+          background: #456;
+          border-radius: 6px;
+        }
 
-  backdrop-filter:blur(10px);
+        /* Форма элементы */
+        label {
+          display: block;
+          margin: 8px 0 4px;
+          letter-spacing: 0.5px;
+          font-weight: bold;
+          color: #bbd9ff;
+        }
 
-  border-radius:20px;
-  padding:14px 18px;
+        input, button, textarea, .select-trigger, .select-option {
+          width: 100%;
+          margin-top: 5px;
+          padding: 6px 10px;
+          background: #1e2a36;
+          border: 1px solid #3e5a6c;
+          color: white;
+          border-radius: 12px;
+          font-weight: 500;
+          transition: 0.1s;
+          box-sizing: border-box;
+          font-family: 'JetBrains Mono', monospace;
+        }
 
-  z-index:20;
+        button {
+          background: #2c4c6c;
+          cursor: pointer;
+          font-weight: bold;
+        }
 
-  border:1px solid rgba(100,150,200,.4);
+        button:hover {
+          background: #3e6a90;
+          border-color: #8ab3d0;
+        }
 
-  box-shadow:0 8px 20px rgba(0,0,0,.6);
-
-  font-family:'JetBrains Mono', monospace;
-}
-    #ui::-webkit-scrollbar{
-    width:8px;
-}
-
-#ui::-webkit-scrollbar-track{
-    background:#152030;
-}
-
-#ui::-webkit-scrollbar-thumb{
-    background:#456;
-    border-radius:6px;
-}
-    label {
-      display: block;
-      margin: 8px 0 4px;
-      letter-spacing: 0.5px;
-      font-weight: bold;
+        /* Кнопки радиуса */
+    .radius-btn {
+      background: #1e2a36;
+      border: 1px solid #3e5a6c;
       color: #bbd9ff;
-    }
-    input, button, textarea {
-      width: 100%;
-      margin-top: 5px;
-      padding: 6px 10px;
-      background: #1e2a36;
-      border: 1px solid #3e5a6c;
-      color: white;
-      border-radius: 12px;
-      font-weight: 500;
-      transition: 0.1s;
-      box-sizing: border-box;
-    }
-    button {
-      background: #2c4c6c;
-      cursor: pointer;
-      font-weight: bold;
-    }
-    button:hover {
-      background: #3e6a90;
-      border-color: #8ab3d0;
-    }
-    textarea {
-      resize: vertical;
-      font-family: monospace;
-      font-size: 10px;
-      background: #010a12;
-      color: #b3ffcc;
-      border: 1px solid #2c6c5e;
-    }
-    #log {
-      margin-top: 12px;
-      font-size: 11px;
-      max-height: 180px;
-      overflow-y: auto;
-      background: #0c121c;
-      border-radius: 12px;
-      padding: 6px 8px;
-      border-left: 3px solid #2c6c9e;
-    }
-    .export-area, .import-area {
-      margin-top: 12px;
-      background: #0f1820;
-      border-radius: 14px;
-      padding: 8px;
-    }
-    .export-area { display: none; }
-    .stat {
-      background: #021018;
-      padding: 5px 8px;
-      border-radius: 30px;
-      text-align: center;
-      margin-top: 8px;
-      font-weight: bold;
-    }
-    hr {
-      border-color: #2f4f6f;
-      margin: 10px 0;
-    }
-    small { font-size: 11px; color: #aac; }
-
-    /* Тултип */
-    #aspect-tooltip {
-      position: fixed;
-      background: rgba(0, 0, 0, 0.85);
-      backdrop-filter: blur(4px);
-      color: #ffecb3;
       font-family: 'JetBrains Mono', monospace;
-      font-size: 14px;
+      font-size: 12px;
       font-weight: bold;
-      padding: 6px 12px;
-      border-radius: 20px;
-      border-left: 3px solid #ffaa44;
-      pointer-events: none;
-      z-index: 1000;
-      white-space: nowrap;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-      transition: opacity 0.1s;
-      opacity: 0;
+      padding: 6px 10px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.1s;
+      flex: 1;
     }
 
-    /* Кастомный select */
-    .custom-select {
-      position: relative;
-      width: 100%;
-      margin-top: 5px;
-    }
-    .select-trigger {
-      width: 100%;
-      padding: 6px 10px;
-      background: #1e2a36;
-      border: 1px solid #3e5a6c;
-      border-radius: 12px;
-      color: white;
-      font-weight: 500;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-family: 'JetBrains Mono', monospace;
-    }
-    .select-trigger img {
-      width: 24px;
-      height: 24px;
-      object-fit: contain;
-    }
-    .select-dropdown {
-      position: absolute;
-      top: 100%;
-      left: 0;
-      right: 0;
-      max-height: 300px;
-      overflow-y: auto;
-      background: #1e2a36;
-      border: 1px solid #3e5a6c;
-      border-radius: 12px;
-      margin-top: 4px;
-      z-index: 100;
-      display: none;
-    }
-    .select-dropdown.show {
-      display: block;
-    }
-    .select-option {
-      padding: 6px 10px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      cursor: pointer;
-      transition: background 0.1s;
-      font-family: 'JetBrains Mono', monospace;
-    }
-    .select-option:hover {
+    .radius-btn:hover {
       background: #2c4c6c;
     }
-    .select-option img {
-      width: 24px;
-      height: 24px;
-      object-fit: contain;
-    }
-    .select-option.selected {
+
+    .radius-btn.active {
       background: #2c6c9e;
+      border-color: #8ab3d0;
+      box-shadow: 0 0 0 2px rgba(60, 120, 180, 0.3);
+      transform: scale(1.05);
     }
 
-    /* Панель таблицы аспектов */
-#aspects-panel {
-  position: fixed;
-  background: rgba(10, 20, 30, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 16px;
-  border: 1px solid #3e5a6c;
-  padding: 12px 8px;
-  z-index: 15;
-  font-family: 'JetBrains Mono', monospace;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-  display: inline-block;
-}
-#aspects-panel h3 {
-  color: #bbd9ff;
-  text-align: center;
-  margin: 0 0 10px 0;
-  font-size: 12px;
-  white-space: nowrap;
-}
-.aspects-grid {
-  display: grid;
-  grid-template-rows: repeat(5, 60px);
-  grid-auto-flow: column;
-  gap: 8px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding-bottom: 4px;
-  width: fit-content;
-}
-/* Горизонтальный скроллбар */
-.aspects-grid::-webkit-scrollbar {
-  height: 8px;
-}
-.aspects-grid::-webkit-scrollbar-track {
-  background: #1e2a36;
-  border-radius: 4px;
-}
-.aspects-grid::-webkit-scrollbar-thumb {
-  background: #3e5a6c;
-  border-radius: 4px;
-}
-.aspects-grid::-webkit-scrollbar-thumb:hover {
-  background: #5a7e9c;
-}
-.aspect-item {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.1s;
-  width: 60px;
-  height: 60px;
-  position: relative;
-  flex-shrink: 0;
-  box-sizing: border-box;
-}
-.aspect-item:hover {
-  background: rgba(60, 100, 140, 0.5);
-  transform: scale(1.05);
-  z-index: 20;
-}
-.aspect-item img {
-  width: 44px;
-  height: 44px;
-  object-fit: contain;
-  display: block;
-}
-/* Подсветка - внутренняя тень */
-.aspect-item.used {
-  background: rgba(100, 200, 100, 0.3);
-  box-shadow: inset 0 0 0 3px #88ff88;
-  border-radius: 8px;
-}
-.aspect-item.user-placed {
-  background: rgba(220, 180, 80, 0.3);
-  box-shadow: inset 0 0 0 3px #ffcc55;
-  border-radius: 8px;
-}
-.aspect-item.both {
-  background: linear-gradient(135deg, rgba(220,180,80,0.3), rgba(100,200,100,0.3));
-  box-shadow: inset 0 0 0 3px #ffee88;
-  border-radius: 8px;
-}
-/* Глобальный тултип */
-.aspect-tooltip-global {
-  position: fixed;
-  background: rgba(0, 0, 0, 0.95);
-  color: #ffecb3;
-  font-size: 11px;
-  padding: 6px 12px;
-  border-radius: 20px;
-  white-space: nowrap;
-  z-index: 10000;
-  pointer-events: none;
-  font-family: 'JetBrains Mono', monospace;
-  border-left: 3px solid #ffaa44;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-  font-weight: bold;
-  display: none;
-}
-</style>
+        textarea {
+          resize: vertical;
+          font-size: 10px;
+          background: #010a12;
+          color: #b3ffcc;
+          border: 1px solid #2c6c5e;
+        }
+
+        /* Лог и статистика */
+        #log {
+          margin-top: 12px;
+          font-size: 11px;
+          max-height: 180px;
+          overflow-y: auto;
+          background: #0c121c;
+          border-radius: 12px;
+          padding: 6px 8px;
+          border-left: 3px solid #2c6c9e;
+        }
+
+        .export-area, .import-area {
+          margin-top: 12px;
+          background: #0f1820;
+          border-radius: 14px;
+          padding: 8px;
+        }
+
+        .export-area {
+          display: none;
+        }
+
+        .stat {
+          background: #021018;
+          padding: 5px 8px;
+          border-radius: 30px;
+          text-align: center;
+          margin-top: 8px;
+          font-weight: bold;
+        }
+
+        hr {
+          border-color: #2f4f6f;
+          margin: 10px 0;
+        }
+
+        small {
+          font-size: 11px;
+          color: #aac;
+        }
+
+        /* Тултип */
+        #aspect-tooltip {
+          position: fixed;
+          background: rgba(0, 0, 0, 0.85);
+          backdrop-filter: blur(4px);
+          color: #ffecb3;
+          font-size: 14px;
+          font-weight: bold;
+          padding: 6px 12px;
+          border-radius: 20px;
+          border-left: 3px solid #ffaa44;
+          pointer-events: none;
+          z-index: 1000;
+          white-space: nowrap;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+          transition: opacity 0.1s;
+          opacity: 0;
+        }
+
+        /* Кастомный select */
+        .custom-select {
+          position: relative;
+          width: 100%;
+        }
+
+        .select-trigger img,
+        .select-option img {
+          width: 24px;
+          height: 24px;
+          object-fit: contain;
+        }
+
+        .select-dropdown {
+          position: absolute;
+          top: 100%;
+          left: 0;
+          right: 0;
+          max-height: 300px;
+          overflow-y: auto;
+          background: #1e2a36;
+          border: 1px solid #3e5a6c;
+          border-radius: 12px;
+          margin-top: 4px;
+          z-index: 100;
+          display: none;
+        }
+
+        .select-dropdown.show {
+          display: block;
+        }
+
+        .select-option {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          cursor: pointer;
+        }
+
+        .select-option:hover {
+          background: #2c4c6c;
+        }
+
+        .select-option.selected {
+          background: #2c6c9e;
+        }
+
+        /* Панель аспектов */
+        #aspects-panel {
+          position: fixed;
+          background: rgba(10, 20, 30, 0.95);
+          backdrop-filter: blur(10px);
+          border-radius: 16px;
+          border: 1px solid #3e5a6c;
+          padding: 12px 8px;
+          z-index: 15;
+          font-family: 'JetBrains Mono', monospace;
+          box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+        }
+
+        #aspects-panel h3 {
+          color: #bbd9ff;
+          text-align: center;
+          margin: 0 0 10px 0;
+          font-size: 12px;
+          white-space: nowrap;
+        }
+
+        .aspects-grid {
+          display: grid;
+          grid-template-rows: repeat(5, 60px);
+          grid-auto-flow: column;
+          gap: 8px;
+          overflow-x: auto;
+          overflow-y: hidden;
+          padding-bottom: 4px;
+          width: fit-content;
+        }
+
+        /* Скроллбар для сетки аспектов */
+        .aspects-grid::-webkit-scrollbar {
+          height: 8px;
+        }
+        .aspects-grid::-webkit-scrollbar-track {
+          background: #1e2a36;
+          border-radius: 4px;
+        }
+        .aspects-grid::-webkit-scrollbar-thumb {
+          background: #3e5a6c;
+          border-radius: 4px;
+        }
+        .aspects-grid::-webkit-scrollbar-thumb:hover {
+          background: #5a7e9c;
+        }
+
+        .aspect-item {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: all 0.1s;
+          width: 60px;
+          height: 60px;
+          position: relative;
+          flex-shrink: 0;
+        }
+
+        .aspect-item.selected::before {
+          content: "★";
+          font-size: 10px;
+          color: #ffcc00;
+          position: absolute;
+          top: 2px;
+          left: 2px;
+          text-shadow: 0 0 2px black;
+          pointer-events: none;
+          font-weight: bold;
+        }
+
+        .aspect-item:hover {
+          background: rgba(60, 100, 140, 0.5);
+          transform: scale(1.05);
+          z-index: 20;
+        }
+
+        .aspect-item img {
+          width: 44px;
+          height: 44px;
+          object-fit: contain;
+        }
+
+        /* Состояния ячеек */
+        .aspect-item.used {
+          background: rgba(100, 200, 100, 0.3);
+          box-shadow: inset 0 0 0 3px #88ff88;
+          border-radius: 8px;
+        }
+
+        .aspect-item.user-placed {
+          background: rgba(220, 180, 80, 0.3);
+          box-shadow: inset 0 0 0 3px #ffcc55;
+          border-radius: 8px;
+        }
+
+        .aspect-item.both {
+          background: linear-gradient(135deg, rgba(220,180,80,0.3), rgba(100,200,100,0.3));
+          box-shadow: inset 0 0 0 3px #ffee88;
+          border-radius: 8px;
+        }
+
+        .aspect-item.blocked {
+          outline: 2px solid #ffcc66;
+          filter: grayscale(1);
+          opacity: 0.7;
+        }
+
+        /* Глобальный тултип */
+        .aspect-tooltip-global {
+          position: fixed;
+          background: rgba(0, 0, 0, 0.95);
+          color: #ffecb3;
+          font-size: 11px;
+          padding: 6px 12px;
+          border-radius: 20px;
+          white-space: nowrap;
+          z-index: 10000;
+          pointer-events: none;
+          font-family: 'JetBrains Mono', monospace;
+          border-left: 3px solid #ffaa44;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+          font-weight: bold;
+          display: none;
+        }
+    </style>
 </head>
 <body>
-  <div id="ui">
+<!-- Остальной HTML (без изменений) -->
+<div id="ui">
     <div style="display: flex; justify-content: space-between;">
-      <span>🌀 ГЕКС-ИССЛЕДОВАТЕЛЬ v4.3</span>
-      <span style="color:#6eff9e;">умная сеть</span>
+        <span>🌀 ГЕКС-ИССЛЕДОВАТЕЛЬ</span>
+        <span style="color:#6eff9e;">умная сеть</span>
     </div>
 
-    <label>📐 Радиус сетки:
-      <input type="number" id="radiusInput" value="4" min="2" max="4">
-    </label>
-    <small>🖱️ Зажмите ЛКМ и водите: включать/выключать | ПКМ: поставить аспект</small>
+    <label>📐 Радиус сетки:</label>
+    <div style="display: flex; gap: 6px; margin-top: 4px;">
+        <button type="button" class="radius-btn" data-radius="2">R3</button>
+        <button type="button" class="radius-btn" data-radius="3">R4</button>
+        <button type="button" class="radius-btn" data-radius="4">R5</button>
+    </div>
+    <small>🖱️ Зажмите ЛКМ и водите: включать/выключать | ПКМ: поставить/убрать аспект</small>
 
     <label>✨ Выбранный аспект:</label>
     <div class="custom-select" id="customSelect">
-      <div class="select-trigger" id="selectTrigger">
-        <img id="selectedIcon" src="" alt="" style="display: none;">
-        <span id="selectedText">aer</span>
-      </div>
-      <div class="select-dropdown" id="selectDropdown"></div>
+        <div class="select-trigger" id="selectTrigger">
+            <img id="selectedIcon" src="" alt="" style="display: none;">
+            <span id="selectedText">aer</span>
+        </div>
+        <div class="select-dropdown" id="selectDropdown"></div>
     </div>
 
     <button id="calculateBtn">🔗 ПОСТРОИТЬ ОПТИМАЛЬНУЮ СЕТЬ</button>
@@ -338,73 +393,52 @@
 
     <button id="exportBtn">💾 Экспорт состояния</button>
     <div class="export-area" id="exportArea">
-      <textarea id="exportText" rows="3"></textarea>
-      <button id="copyBtn">📋 Скопировать JSON</button>
+        <textarea id="exportText" rows="3"></textarea>
+        <button id="copyBtn">📋 Скопировать JSON</button>
     </div>
 
     <div class="import-area">
-      <label>📥 Импорт состояния</label>
-      <textarea id="importText" rows="3" placeholder='{"version":"full_aspects_4.3","radius":4,"activeCells":["0,0"],"aspectCells":["0,0:ordo"]}'></textarea>
-      <button id="importBtn">📂 Загрузить состояние</button>
+        <label>📥 Импорт состояния</label>
+        <textarea id="importText" rows="3"
+                  placeholder='{"version":"full_aspects_4.3","radius":4,"activeCells":["0,0"],"aspectCells":["0,0:ordo"]}'></textarea>
+        <button id="importBtn">📂 Загрузить состояние</button>
     </div>
     <hr>
 
-<label>🔍 Распознавание аспектов</label>
+    <label>🔍 Распознавание сетки и аспектов со скриншота:</label>
+    <input type="file" id="uploadAspects" accept="image/*">
+    <div style="display:flex; gap:6px; margin-top:6px;">
+        <button id="testR3">R3</button>
+        <button id="testR4">R4</button>
+        <button id="testR5">R5</button>
+    </div>
+    <label>
+        Порог:
+        <input type="range" id="conf" min="0" max="1" step="0.01" value="0.31">
+        <span id="confv">0.31</span>
+    </label>
+    <button id="clearRecognitionLog">🧹 Очистить лог распознавания</button>
+    <canvas id="recognitionCanvas"
+            style="margin-top:8px;width:100%;max-height:300px;border:1px solid #555;background:#111;"></canvas>
 
-<input
-type="file"
-id="uploadAspects"
-accept="image/*">
-<div style="display:flex; gap:6px; margin-top:6px;">
-    <button id="testR3">R3</button>
-    <button id="testR4">R4</button>
-    <button id="testR5">R5</button>
-</div>
-<label>
-Порог:
-<input
-type="range"
-id="conf"
-min="0"
-max="1"
-step="0.01"
-value="0.31">
-<span id="confv">0.31</span>
-</label>
-
-<button id="clearRecognitionLog">
-🧹 Очистить лог распознавания
-</button>
-
-<canvas
-id="recognitionCanvas"
-style="
-margin-top:8px;
-width:100%;
-max-height:300px;
-border:1px solid #555;
-background:#111;
-">
-</canvas>
     <div class="stat">🎯 Активных клеток: <span id="activeCount">0</span></div>
     <div id="log">✨ Полная база аспектов (TC + аддоны). Соединение любого числа аспектов с оптимальными путями.</div>
-  </div>
+</div>
 
-  <canvas id="hexCanvas"></canvas>
+<canvas id="hexCanvas"></canvas>
 
-  <!-- Панель таблицы аспектов -->
-  <div id="aspects-panel">
+<!-- Панель таблицы аспектов -->
+<div id="aspects-panel">
     <h3>📜 ТАБЛИЦА АСПЕКТОВ</h3>
     <div id="aspects-grid" class="aspects-grid"></div>
-  </div>
+</div>
 
-  <!-- Тултип -->
-  <div id="aspect-tooltip"></div>
-  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/ort.min.js"></script>
-  <script src="grid.js"></script>
-  <script src="app.js"></script>
-<!-- Глобальный тултип для аспектов -->
+<!-- Тултип -->
+<div id="aspect-tooltip"></div>
 <div id="global-tooltip" class="aspect-tooltip-global"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/ort.min.js"></script>
+<script src="grid.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>
